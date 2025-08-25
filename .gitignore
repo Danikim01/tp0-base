@@ -7,3 +7,6 @@ bin/
 ejemplo-cambio-configuracion.sh
 RESUMEN_CAMBIOS.md
 CONFIGURACION_VOLUMENES.md
+ejemplo-validacion.sh
+INSTRUCCIONES_VALIDACION.md
+RESUMEN_VALIDACION.md
