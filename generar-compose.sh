@@ -15,8 +15,8 @@ ARCHIVO_SALIDA="$1"
 CANTIDAD_CLIENTES="$2"
 
 # Verificar que la cantidad de clientes sea un número válido
-if ! [[ "$CANTIDAD_CLIENTES" =~ ^[0-9]+$ ]] || [ "$CANTIDAD_CLIENTES" -lt 1 ]; then
-    echo "Error: La cantidad de clientes debe ser un número entero positivo"
+if ! [[ "$CANTIDAD_CLIENTES" =~ ^[0-9]+$ ]] || [ "$CANTIDAD_CLIENTES" -lt 0 ]; then
+    echo "Error: La cantidad de clientes debe ser un número entero no negativo"
     exit 1
 fi
 
