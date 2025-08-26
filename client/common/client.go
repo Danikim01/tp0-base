@@ -1,9 +1,7 @@
 package common
 
 import (
-	"bufio"
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"os/signal"

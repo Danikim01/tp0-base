@@ -2,7 +2,7 @@ import json
 import logging
 import socket
 from typing import Optional, Tuple
-from utils import Bet, store_bet
+from .utils import Bet, store_bet
 
 class Protocol:
     """Maneja la comunicación entre cliente y servidor"""
@@ -33,6 +33,16 @@ class Protocol:
                 return None
             
             bet_data = request.get('bet', {})
+            
+            # Log para debug
+            logging.debug(f"action: receive_bet | result: debug | bet_data: {bet_data}")
+            
+            # Validar que todos los campos estén presentes
+            required_fields = ['nombre', 'apellido', 'dni', 'nacimiento', 'numero']
+            for field in required_fields:
+                if not bet_data.get(field):
+                    logging.error(f"action: receive_bet | result: fail | error: missing field {field}")
+                    return None
             
             # Crear objeto Bet
             bet = Bet(

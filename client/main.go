@@ -38,7 +38,7 @@ func InitConfig() (*viper.Viper, error) {
 	v.BindEnv("loop", "amount")
 	v.BindEnv("log", "level")
 	
-	// Variables de entorno para la apuesta
+	// Variables de entorno para la apuesta (sin prefijo CLI_)
 	v.BindEnv("nombre")
 	v.BindEnv("apellido")
 	v.BindEnv("documento")
@@ -117,14 +117,18 @@ func main() {
 		LoopPeriod:    v.GetDuration("loop.period"),
 	}
 
-	// Configuración de la apuesta
+	// Configuración de la apuesta usando os.Getenv directamente
 	bet := common.Bet{
-		Nombre:     v.GetString("nombre"),
-		Apellido:   v.GetString("apellido"),
-		DNI:        v.GetString("documento"),
-		Nacimiento: v.GetString("nacimiento"),
-		Numero:     v.GetString("numero"),
+		Nombre:     os.Getenv("NOMBRE"),
+		Apellido:   os.Getenv("APELLIDO"),
+		DNI:        os.Getenv("DOCUMENTO"),
+		Nacimiento: os.Getenv("NACIMIENTO"),
+		Numero:     os.Getenv("NUMERO"),
 	}
+
+	// Log para debug de las variables de entorno
+	log.Infof("action: bet_config | result: debug | nombre: '%s' | apellido: '%s' | dni: '%s' | nacimiento: '%s' | numero: '%s'",
+		bet.Nombre, bet.Apellido, bet.DNI, bet.Nacimiento, bet.Numero)
 
 	client := common.NewClient(clientConfig)
 	client.StartClientLoop(bet)

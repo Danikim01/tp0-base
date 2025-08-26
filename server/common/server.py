@@ -3,7 +3,7 @@ import logging
 import signal
 import sys
 import threading
-from protocol import Protocol
+from .protocol import Protocol
 
 
 class Server:
