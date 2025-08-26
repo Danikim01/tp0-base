@@ -34,9 +34,6 @@ class Protocol:
             
             bet_data = request.get('bet', {})
             
-            # Log para debug
-            logging.debug(f"action: receive_bet | result: debug | bet_data: {bet_data}")
-            
             # Validar que todos los campos estén presentes
             required_fields = ['nombre', 'apellido', 'dni', 'nacimiento', 'numero']
             for field in required_fields:

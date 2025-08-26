@@ -126,8 +126,8 @@ func main() {
 		Numero:     os.Getenv("NUMERO"),
 	}
 
-	// Log para debug de las variables de entorno
-	log.Infof("action: bet_config | result: debug | nombre: '%s' | apellido: '%s' | dni: '%s' | nacimiento: '%s' | numero: '%s'",
+	// Log para debug de las variables de entorno (sin formato de acción para no interferir con el parser)
+	log.Infof("DEBUG: bet_config - nombre: '%s' | apellido: '%s' | dni: '%s' | nacimiento: '%s' | numero: '%s'",
 		bet.Nombre, bet.Apellido, bet.DNI, bet.Nacimiento, bet.Numero)
 
 	client := common.NewClient(clientConfig)
