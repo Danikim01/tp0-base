@@ -49,7 +49,7 @@ for i in $(seq 1 $CANTIDAD_CLIENTES); do
     entrypoint: /client
     environment:
       - CLI_ID=$i
-      - CLI_SERVER_ADDRESS=server:8080
+      - CLI_SERVER_ADDRESS=server:12345
       - CLI_LOOP_AMOUNT=1
       - CLI_LOOP_PERIOD=1s
       - CLI_LOG_LEVEL=INFO
