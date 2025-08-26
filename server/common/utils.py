@@ -4,7 +4,7 @@ import time
 
 
 """ Bets storage location. """
-STORAGE_FILEPATH = "./bets.csv"
+STORAGE_FILEPATH = "./data/bets.csv"
 """ Simulated winner number in the lottery contest. """
 LOTTERY_WINNER_NUMBER = 7574
 
@@ -38,6 +38,16 @@ def store_bets(bets: list[Bet]) -> None:
         for bet in bets:
             writer.writerow([bet.agency, bet.first_name, bet.last_name,
                              bet.document, bet.birthdate, bet.number])
+
+"""
+Persist the information of a single bet in the STORAGE_FILEPATH file.
+Not thread-safe/process-safe.
+"""
+def store_bet(bet: Bet) -> None:
+    with open(STORAGE_FILEPATH, 'a+') as file:
+        writer = csv.writer(file, quoting=csv.QUOTE_MINIMAL)
+        writer.writerow([bet.agency, bet.first_name, bet.last_name,
+                         bet.document, bet.birthdate, bet.number])
 
 """
 Loads the information all the bets in the STORAGE_FILEPATH file.

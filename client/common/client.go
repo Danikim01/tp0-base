@@ -31,6 +31,7 @@ type Client struct {
 	mu     sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
+	protocol *Protocol
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -41,6 +42,7 @@ func NewClient(config ClientConfig) *Client {
 		config: config,
 		ctx:    ctx,
 		cancel: cancel,
+		protocol: NewProtocol(),
 	}
 	return client
 }
@@ -105,7 +107,7 @@ func (c *Client) setupSignalHandlers() {
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met
-func (c *Client) StartClientLoop() {
+func (c *Client) StartClientLoop(bet Bet) {
 	// Set up signal handlers for graceful shutdown
 	c.setupSignalHandlers()
 	
@@ -132,29 +134,40 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
-		// TODO: Modify the send to avoid short-write
-		fmt.Fprintf(
-			c.conn,
-			"[CLIENT %v] Message N°%v\n",
-			c.config.ID,
-			msgID,
-		)
-		
-		msg, err := bufio.NewReader(c.conn).ReadString('\n')
+		// Enviar apuesta usando el protocolo
+		if err := c.protocol.SendBet(c.conn, bet); err != nil {
+			log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			c.closeClientSocket()
+			return
+		}
+
+		// Recibir respuesta del servidor
+		response, err := c.protocol.ReceiveResponse(c.conn)
 		c.closeClientSocket()
 
 		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+			log.Errorf("action: receive_response | result: fail | client_id: %v | error: %v",
 				c.config.ID,
 				err,
 			)
 			return
 		}
 
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID,
-			msg,
-		)
+		// Log de confirmación según el formato requerido
+		if response.Status == "success" {
+			log.Infof("action: apuesta_enviada | result: success | dni: %s | numero: %s",
+				response.DNI,
+				response.Numero,
+			)
+		} else {
+			log.Errorf("action: apuesta_enviada | result: fail | dni: %s | numero: %s",
+				response.DNI,
+				response.Numero,
+			)
+		}
 
 		// Wait a time between sending one message and the next one
 		// Use select to allow interruption during sleep
