@@ -88,7 +88,7 @@ class Server:
 
     def __handle_client_connection(self, client_sock):
         """
-        Process bet from a specific client socket and closes the socket
+        Process multiple messages from a specific client socket and closes the socket
 
         If a problem arises in the communication with the client, the
         client socket will also be closed
@@ -98,13 +98,24 @@ class Server:
             self._active_connections.append(client_sock)
         
         try:
-            # Process bet or batch using protocol
-            success = self._protocol.process_message(client_sock)
             addr = client_sock.getpeername()
-            if success:
-                logging.info(f'action: bet_processed | result: success | ip: {addr[0]}')
-            else:
-                logging.error(f'action: bet_processed | result: fail | ip: {addr[0]}')
+            # Process multiple messages until connection is closed or error occurs
+            while True:
+                try:
+                    # Process bet or batch using protocol
+                    success = self._protocol.process_message(client_sock)
+                    if success:
+                        logging.info(f'action: bet_processed | result: success | ip: {addr[0]}')
+                    else:
+                        logging.error(f'action: bet_processed | result: fail | ip: {addr[0]}')
+                        break  # Stop processing on failure
+                except (OSError, ConnectionResetError, BrokenPipeError) as e:
+                    # Connection was closed by client or network error
+                    logging.info(f'action: client_disconnected | result: success | ip: {addr[0]}')
+                    break
+                except Exception as e:
+                    logging.error(f"action: bet_processed | result: fail | error: {e}")
+                    break
         except OSError as e:
             logging.error(f"action: bet_processed | result: fail | error: {e}")
         finally:
