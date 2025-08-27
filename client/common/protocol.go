@@ -3,7 +3,6 @@ package common
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
 	"net"
 )
 

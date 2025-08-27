@@ -14,5 +14,6 @@ CIERRE_GRACEFUL.md
 RESUMEN_GRACEFUL_SHUTDOWN.md
 test-graceful-shutdown.sh
 server/data/
+run-local.sh
 test-quiniela.sh
 docker-compose-quiniela.yaml

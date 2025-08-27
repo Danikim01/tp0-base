@@ -36,6 +36,17 @@ make build
 cd server && python3 main.py
 
 # 3. Iniciar cliente (terminal 2)
+# Desde el directorio raíz del proyecto:
+export NOMBRE="Santiago Lionel"
+export APELLIDO="Lorca"
+export DOCUMENTO="30904465"
+export NACIMIENTO="1999-03-17"
+export NUMERO="7574"
+export CLI_ID="1"
+export CLI_SERVER_ADDRESS="localhost:12345"
+export CLI_LOOP_AMOUNT="5"
+export CLI_LOOP_PERIOD="5s"
+export CLI_LOG_LEVEL="INFO"
 ./bin/client
 ```
 
@@ -113,6 +124,22 @@ Si prefieres ejecutar el sistema localmente sin Docker, sigue estos pasos:
 
 5. **Iniciar el cliente (en otra terminal):**
    ```bash
+   # Desde el directorio raíz del proyecto:
+   # Configurar variables de entorno para la apuesta:
+   export NOMBRE="Santiago Lionel"
+   export APELLIDO="Lorca"
+   export DOCUMENTO="30904465"
+   export NACIMIENTO="1999-03-17"
+   export NUMERO="7574"
+   
+   # Configurar variables de entorno del cliente:
+   export CLI_ID="1"
+   export CLI_SERVER_ADDRESS="localhost:12345"
+   export CLI_LOOP_AMOUNT="5"
+   export CLI_LOOP_PERIOD="5s"
+   export CLI_LOG_LEVEL="INFO"
+   
+   # Ejecutar el cliente:
    ./bin/client
    ```
 
@@ -130,20 +157,29 @@ Si prefieres ejecutar el sistema localmente sin Docker, sigue estos pasos:
 - Archivo de configuración: `client/config.yaml`
 - Variables de entorno disponibles:
   - `CLI_ID`: ID del cliente
-  - `CLI_SERVER_ADDRESS`: Dirección del servidor
+  - `CLI_SERVER_ADDRESS`: Dirección del servidor (`localhost:12345` para local, `server:12345` para Docker)
   - `CLI_LOOP_AMOUNT`: Cantidad de mensajes a enviar
-  - `CLI_LOOP_PERIOD`: Período entre mensajes
+  - `CLI_LOOP_PERIOD`: Período entre mensajes (ej: `5s`, `150ms`)
   - `CLI_LOG_LEVEL`: Nivel de logging
+- **Importante**: Para ejecución local, usar `localhost:12345`. Para Docker, usar `server:12345`
 
 ### 🔧 Configuración de Variables de Entorno
 
 #### Para el Cliente (Agencia de Quiniela):
 ```bash
+# Variables de la apuesta:
 export NOMBRE="Santiago Lionel"
 export APELLIDO="Lorca"
 export DOCUMENTO="30904465"
 export NACIMIENTO="1999-03-17"
 export NUMERO="7574"
+
+# Variables de configuración del cliente:
+export CLI_ID="1"
+export CLI_SERVER_ADDRESS="localhost:12345"
+export CLI_LOOP_AMOUNT="5"
+export CLI_LOOP_PERIOD="5s"
+export CLI_LOG_LEVEL="INFO"
 ```
 
 #### Para el Servidor:
@@ -197,6 +233,54 @@ make docker-compose-down
 ```
 client1  | action: apuesta_enviada | result: success | dni: 30904465 | numero: 7574
 server   | action: apuesta_almacenada | result: success | dni: 30904465 | numero: 7574
+```
+
+### 🚨 Solución de Problemas
+
+#### Problema: `./bin/client: No such file or directory`
+```bash
+# Asegúrate de estar en el directorio raíz del proyecto
+pwd  # Debería mostrar: /path/to/tp0-base
+
+# Si no existe el binario, compílalo:
+make build
+
+# Verifica que existe:
+ls -la bin/client
+```
+
+#### Problema: `Could not parse CLI_LOOP_PERIOD env var as time.Duration`
+```bash
+# Asegúrate de configurar todas las variables de entorno del cliente:
+export CLI_ID="1"
+export CLI_SERVER_ADDRESS="localhost:12345"
+export CLI_LOOP_AMOUNT="5"
+export CLI_LOOP_PERIOD="5s"  # Formato correcto: "5s", "150ms", etc.
+export CLI_LOG_LEVEL="INFO"
+```
+
+#### Problema: Puerto ya en uso
+```bash
+# Verificar qué está usando el puerto
+sudo netstat -tulpn | grep :12345
+
+# Cambiar puerto en configuración
+export SERVER_PORT="12346"
+```
+
+#### Problema: Permisos de Docker
+```bash
+# Agregar usuario al grupo docker
+sudo usermod -aG docker $USER
+# Reiniciar sesión
+```
+
+#### Problema: Imágenes no se construyen
+```bash
+# Limpiar y reconstruir
+make docker-compose-down
+docker system prune -f
+make docker-compose-up
 ```
 
 ### Servidor
