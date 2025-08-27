@@ -16,3 +16,6 @@ test-graceful-shutdown.sh
 server/data/bets.csv
 run-local.sh
 test-quiniela.sh
+
+#Ignore agency-*.csv
+.data/agency-*.csv
