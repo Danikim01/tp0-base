@@ -38,14 +38,6 @@ docker-compose-logs:
 	docker compose -f docker-compose-dev.yaml logs -f
 .PHONY: docker-compose-logs
 
-test-protocol:
-	python3 test_protocol.py
-.PHONY: test-protocol
-
-test-all: test-protocol
-	@echo "Todas las pruebas completadas"
-.PHONY: test-all
-
 clean:
 	rm -rf bin/
 	rm -rf __pycache__/

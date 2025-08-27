@@ -19,10 +19,7 @@ make docker-compose-up
 # 3. Ver los logs
 make docker-compose-logs
 
-# 4. Probar el protocolo
-make test-protocol
-
-# 5. Detener el sistema
+# 4. Detener el sistema
 make docker-compose-down
 ```
 
@@ -62,8 +59,6 @@ Los targets disponibles son:
 |  `docker-compose-logs` | Permite ver los logs actuales del proyecto. Acompañar con `grep` para lograr ver mensajes de una aplicación específica dentro del compose. |
 | `docker-image`  | Construye las imágenes a ser utilizadas tanto en el servidor como en el cliente. Este target es utilizado por **docker-compose-up**, por lo cual se lo puede utilizar para probar nuevos cambios en las imágenes antes de arrancar el proyecto. |
 | `build` | Compila la aplicación cliente para ejecución en el _host_ en lugar de en Docker. De este modo la compilación es mucho más veloz, pero requiere contar con todo el entorno de Golang y Python instalados en la máquina _host_. |
-| `test-protocol` | Ejecuta las pruebas del protocolo de comunicación propio. |
-| `test-all` | Ejecuta todas las pruebas disponibles. |
 
 #### 🐳 Pasos para ejecutar con Docker:
 
@@ -80,11 +75,6 @@ Los targets disponibles son:
 3. **Detener el sistema:**
    ```bash
    make docker-compose-down
-   ```
-
-4. **Probar el protocolo:**
-   ```bash
-   make test-protocol
    ```
 
 ### 💻 Ejecución Local (Desarrollo)
@@ -208,11 +198,6 @@ docker logs server
 docker logs client1
 ```
 
-#### Probar el protocolo:
-```bash
-make test-protocol
-```
-
 ### 📝 Ejemplo de Ejecución Completa
 
 ```bash
@@ -222,10 +207,7 @@ make docker-compose-up
 # 2. Ver logs
 make docker-compose-logs
 
-# 3. En otra terminal, probar el protocolo
-make test-protocol
-
-# 4. Detener el sistema
+# 3. Detener el sistema
 make docker-compose-down
 ```
 
@@ -233,54 +215,6 @@ make docker-compose-down
 ```
 client1  | action: apuesta_enviada | result: success | dni: 30904465 | numero: 7574
 server   | action: apuesta_almacenada | result: success | dni: 30904465 | numero: 7574
-```
-
-### 🚨 Solución de Problemas
-
-#### Problema: `./bin/client: No such file or directory`
-```bash
-# Asegúrate de estar en el directorio raíz del proyecto
-pwd  # Debería mostrar: /path/to/tp0-base
-
-# Si no existe el binario, compílalo:
-make build
-
-# Verifica que existe:
-ls -la bin/client
-```
-
-#### Problema: `Could not parse CLI_LOOP_PERIOD env var as time.Duration`
-```bash
-# Asegúrate de configurar todas las variables de entorno del cliente:
-export CLI_ID="1"
-export CLI_SERVER_ADDRESS="localhost:12345"
-export CLI_LOOP_AMOUNT="5"
-export CLI_LOOP_PERIOD="5s"  # Formato correcto: "5s", "150ms", etc.
-export CLI_LOG_LEVEL="INFO"
-```
-
-#### Problema: Puerto ya en uso
-```bash
-# Verificar qué está usando el puerto
-sudo netstat -tulpn | grep :12345
-
-# Cambiar puerto en configuración
-export SERVER_PORT="12346"
-```
-
-#### Problema: Permisos de Docker
-```bash
-# Agregar usuario al grupo docker
-sudo usermod -aG docker $USER
-# Reiniciar sesión
-```
-
-#### Problema: Imágenes no se construyen
-```bash
-# Limpiar y reconstruir
-make docker-compose-down
-docker system prune -f
-make docker-compose-up
 ```
 
 ### Servidor
@@ -473,7 +407,6 @@ Se ha implementado un protocolo binario eficiente y robusto.
 | Tipo | Valor | Descripción |
 |------|-------|-------------|
 | MSG_BET | 0x01 | Apuesta individual |
-| MSG_BATCH | 0x02 | Batch de apuestas |
 | MSG_SUCCESS | 0x03 | Respuesta de éxito |
 | MSG_ERROR | 0x04 | Respuesta de error |
 
@@ -493,6 +426,15 @@ Cada string se codifica como `[LONGITUD_STRING][DATOS_STRING]`:
 ```
 [DNI_LEN][DNI][NUMERO_LEN][NUMERO]
 ```
+
+#### Almacenamiento de Apuestas
+Las apuestas procesadas se almacenan en:
+
+* Local: ./server/data/bets.csv
+* Docker: /server_data/bets.csv (dentro del contenedor)
+
+El directorio server/data/ se incluye en el repositorio para asegurar que funcione correctamente cuando alguien clone el proyecto. El archivo bets.csv se ignora en Git para evitar conflictos entre diferentes ejecuciones.
+
 
 ### Manejo de Errores
 
