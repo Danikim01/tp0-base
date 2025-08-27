@@ -1,25 +1,5 @@
 # Protocolo de Comunicación Propio - TP0
 
-## Descripción General
-
-Este documento describe el protocolo de comunicación propio implementado para el TP0, que reemplaza el uso de JSON por un protocolo binario eficiente y robusto.
-
-## Características del Protocolo
-
-### ✅ Cumple con las Pautas Obligatorias
-
-- ✅ **Protocolo definido y coherente**: Estructura clara con header, payload y delimitador
-- ✅ **Sockets nativos**: Uso directo de sockets TCP sin librerías externas
-- ✅ **Sin JSON**: Protocolo binario propio sin dependencias de serialización
-- ✅ **Manejo correcto de paquetes**: Delimitadores y control de longitud
-- ✅ **Concurrencia**: Preparado para multithreading/multiprocessing
-
-### ✅ Evita Causas de Desaprobación
-
-- ✅ **Sincronización**: Uso de mutexes para acceso a recursos compartidos
-- ✅ **Cierre de FDs**: Manejo graceful de conexiones y recursos
-- ✅ **Control de bytes**: Lectura/escritura exacta evitando short-read/short-write
-- ✅ **Manejo de errores**: Validación completa de mensajes y conexiones
 
 ## Estructura del Protocolo
 
@@ -36,23 +16,14 @@ Donde:
 
 **Tipos de Mensaje:**
 - `0x01`: Apuesta individual
-- `0x02`: Batch de apuestas  
 - `0x03`: Respuesta de éxito
 - `0x04`: Respuesta de error
-- `0x05`: Notificación de fin de apuestas
-- `0x06`: Consulta de ganadores
-- `0x07`: Respuesta de ganadores
 
 ## Formato del Payload
 
 **Apuesta Individual (Tipo 0x01):**
 ```
 [NOMBRE_LEN][NOMBRE][APELLIDO_LEN][APELLIDO][DNI_LEN][DNI][NACIMIENTO_LEN][NACIMIENTO][NUMERO_LEN][NUMERO]
-```
-
-**Batch de Apuestas (Tipo 0x02):**
-```
-[CANTIDAD_APUESTAS][APUESTA_1][APUESTA_2]...[APUESTA_N]
 ```
 
 **Respuesta (Tipos 0x03, 0x04):**
@@ -142,23 +113,6 @@ func (p *Protocol) ReceiveMessage(conn net.Conn) (byte, []byte, error) {
 - Payload incompleto
 - Tipo de mensaje desconocido
 - Error de codificación/decodificación
-
-## Ventajas del Protocolo
-
-### Eficiencia
-- **Menor overhead**: Sin metadatos JSON innecesarios
-- **Codificación binaria**: Más compacta que texto
-- **Parsing rápido**: Sin análisis de strings
-
-### Robustez
-- **Delimitadores claros**: Evita problemas de framing
-- **Control de longitud**: Previene buffer overflows
-- **Validación completa**: Múltiples capas de verificación
-
-### Escalabilidad
-- **Tipos extensibles**: Fácil agregar nuevos tipos de mensaje
-- **Estructura modular**: Separación clara de responsabilidades
-- **Preparado para concurrencia**: Sin estado compartido
 
 ## Ejemplo de Uso
 

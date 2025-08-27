@@ -14,13 +14,9 @@ class Protocol:
     
     # Tipos de mensaje
     MSG_BET = 0x01
-    MSG_BATCH = 0x02
     MSG_SUCCESS = 0x03
     MSG_ERROR = 0x04
-    MSG_FINISH = 0x05
-    MSG_WINNERS_QUERY = 0x06
-    MSG_WINNERS_RESPONSE = 0x07
-    
+
     def __init__(self):
         pass
     

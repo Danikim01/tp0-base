@@ -183,19 +183,9 @@ La corrección personal tendrá en cuenta la calidad del código entregado y cas
 
 ### Descripción General
 
-Se ha implementado un protocolo de comunicación propio que reemplaza el uso de JSON por un protocolo binario eficiente y robusto. El protocolo cumple con todas las pautas obligatorias del TP0 y evita las causas de desaprobación.
+Se ha implementado un protocolo binario eficiente y robusto.
 
 ### Características Principales
-
-#### ✅ Cumple con las Pautas Obligatorias
-
-- **Protocolo definido y coherente**: Estructura clara con header, payload y delimitador
-- **Sockets nativos**: Uso directo de sockets TCP sin librerías externas
-- **Sin JSON**: Protocolo binario propio sin dependencias de serialización
-- **Manejo correcto de paquetes**: Delimitadores y control de longitud
-- **Concurrencia**: Preparado para multithreading/multiprocessing
-
-#### ✅ Evita Causas de Desaprobación
 
 - **Sincronización**: Uso de mutexes para acceso a recursos compartidos
 - **Cierre de FDs**: Manejo graceful de conexiones y recursos
@@ -220,9 +210,6 @@ Se ha implementado un protocolo de comunicación propio que reemplaza el uso de 
 | MSG_BATCH | 0x02 | Batch de apuestas |
 | MSG_SUCCESS | 0x03 | Respuesta de éxito |
 | MSG_ERROR | 0x04 | Respuesta de error |
-| MSG_FINISH | 0x05 | Notificación de fin de apuestas |
-| MSG_WINNERS_QUERY | 0x06 | Consulta de ganadores |
-| MSG_WINNERS_RESPONSE | 0x07 | Respuesta de ganadores |
 
 ### Formato de Datos
 
@@ -241,27 +228,10 @@ Cada string se codifica como `[LONGITUD_STRING][DATOS_STRING]`:
 [DNI_LEN][DNI][NUMERO_LEN][NUMERO]
 ```
 
-### Ventajas del Protocolo
-
-#### Eficiencia
-- **Menor overhead**: Sin metadatos JSON innecesarios
-- **Codificación binaria**: Más compacta que texto
-- **Parsing rápido**: Sin análisis de strings
-
-#### Robustez
-- **Delimitadores claros**: Evita problemas de framing
-- **Control de longitud**: Previene buffer overflows
-- **Validación completa**: Múltiples capas de verificación
-
-#### Escalabilidad
-- **Tipos extensibles**: Fácil agregar nuevos tipos de mensaje
-- **Estructura modular**: Separación clara de responsabilidades
-- **Preparado para concurrencia**: Sin estado compartido
-
 ### Manejo de Errores
 
 #### Validaciones Implementadas
-1. **Longitud de mensaje**: Máximo 8KB para evitar ataques DoS
+1. **Longitud de mensaje**: Máximo 8KB
 2. **Delimitador**: Verificación del byte delimitador
 3. **Datos completos**: Lectura/escritura exacta de bytes
 4. **Tipos de mensaje**: Validación de tipos válidos
