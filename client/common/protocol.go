@@ -19,9 +19,6 @@ const (
 	MSG_BATCH           = 0x02
 	MSG_SUCCESS         = 0x03
 	MSG_ERROR           = 0x04
-	MSG_FINISH          = 0x05
-	MSG_WINNERS_QUERY   = 0x06
-	MSG_WINNERS_RESPONSE = 0x07
 )
 
 // Bet representa una apuesta de quiniela
@@ -214,6 +211,35 @@ func (p *Protocol) DecodeBet(payload []byte) (Bet, error) {
 func (p *Protocol) SendBet(conn net.Conn, bet Bet) error {
 	payload := p.EncodeBet(bet)
 	return p.SendMessage(conn, MSG_BET, payload)
+}
+
+// EncodeBatch codifica un batch de apuestas a bytes
+func (p *Protocol) EncodeBatch(bets []Bet) []byte {
+	payload := make([]byte, 0)
+	
+	// Escribir cantidad de apuestas (4 bytes)
+	cantidad := uint32(len(bets))
+	cantidadBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(cantidadBytes, cantidad)
+	payload = append(payload, cantidadBytes...)
+	
+	// Escribir cada apuesta con su longitud
+	for _, bet := range bets {
+		betData := p.EncodeBet(bet)
+		betLength := uint32(len(betData))
+		betLengthBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(betLengthBytes, betLength)
+		payload = append(payload, betLengthBytes...)
+		payload = append(payload, betData...)
+	}
+	
+	return payload
+}
+
+// SendBatch envía un batch de apuestas al servidor
+func (p *Protocol) SendBatch(conn net.Conn, bets []Bet) error {
+	payload := p.EncodeBatch(bets)
+	return p.SendMessage(conn, MSG_BATCH, payload)
 }
 
 // ReceiveResponse recibe la respuesta del servidor

@@ -445,11 +445,59 @@ Se proveen [pruebas automáticas](https://github.com/7574-sistemas-distribuidos/
 
 La corrección personal tendrá en cuenta la calidad del código entregado y casos de error posibles, se manifiesten o no durante la ejecución del trabajo práctico. Se pide a los alumnos leer atentamente y **tener en cuenta** los criterios de corrección informados  [en el campus](https://campusgrado.fi.uba.ar/mod/page/view.php?id=73393).
 
+## Ejercicio 6: Procesamiento por Batches
+
+### Descripción General
+
+Se ha implementado el procesamiento por batches (chunks) que permite enviar múltiples apuestas en una sola consulta, optimizando los tiempos de transmisión y procesamiento.
+
+### Características Principales
+
+- **Procesamiento por Batches**: Envío de múltiples apuestas en una sola transacción
+- **Archivos CSV**: Lectura de apuestas desde archivos numerados por agencia
+- **Volúmenes Docker**: Persistencia de datos fuera de las imágenes
+- **Configuración Flexible**: Tamaño máximo de batch configurable
+- **Logs Detallados**: Seguimiento completo del procesamiento
+
+### Estructura de Archivos
+
+```
+.data/
+├── agency-1.csv    # Apuestas de la agencia 1
+├── agency-2.csv    # Apuestas de la agencia 2
+└── agency-N.csv    # Apuestas de la agencia N
+```
+
+### Formato CSV
+
+```csv
+agency,first_name,last_name,document,birthdate,number
+1,Juan,Pérez,12345678,1990-01-01,1234
+1,María,González,23456789,1985-05-15,5678
+```
+
+### Configuración de Batches
+
+```yaml
+batch:
+  maxAmount: 50  # Máximo 50 apuestas por batch (ajustado para < 8KB)
+```
+
+### Logs del Servidor
+
+- **Éxito**: `action: apuesta_recibida | result: success | cantidad: ${CANTIDAD}`
+- **Error**: `action: apuesta_recibida | result: fail | cantidad: ${CANTIDAD}`
+
+### Logs del Cliente
+
+- **Batch Exitoso**: `action: batch_processed | result: success | cantidad: ${CANTIDAD}`
+- **Batch Fallido**: `action: batch_processed | result: fail | cantidad: ${CANTIDAD}`
+
 ## Protocolo de Comunicación Implementado
 
 ### Descripción General
 
-Se ha implementado un protocolo binario eficiente y robusto.
+Se ha implementado un protocolo binario eficiente y robusto que soporta tanto apuestas individuales como batches.
 
 ### Características Principales
 

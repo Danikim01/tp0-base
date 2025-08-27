@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -117,19 +118,57 @@ func main() {
 		LoopPeriod:    v.GetDuration("loop.period"),
 	}
 
-	// Configuración de la apuesta usando os.Getenv directamente
-	bet := common.Bet{
-		Nombre:     os.Getenv("NOMBRE"),
-		Apellido:   os.Getenv("APELLIDO"),
-		DNI:        os.Getenv("DOCUMENTO"),
-		Nacimiento: os.Getenv("NACIMIENTO"),
-		Numero:     os.Getenv("NUMERO"),
+	// Obtener configuración de batch
+	maxBatchSize := v.GetInt("batch.maxAmount")
+	
+	// Verificar si estamos en modo batch (archivo CSV) o modo individual
+	agencyID := v.GetString("id")
+	if agencyID != "" {
+		// Modo batch: procesar archivo CSV de la agencia
+		agencyIDInt, _ := strconv.Atoi(agencyID)
+		filename := common.GetAgencyFilename(agencyIDInt)
+		
+		protocol := common.NewProtocol()
+		batchProcessor := common.NewBatchProcessor(protocol, maxBatchSize)
+		
+		// Leer apuestas desde CSV
+		bets, err := batchProcessor.ReadBetsFromCSV(filename)
+		if err != nil {
+			log.Errorf("Error leyendo archivo CSV %s: %v", filename, err)
+			// Fallback a modo individual
+			bet := common.Bet{
+				Nombre:     os.Getenv("NOMBRE"),
+				Apellido:   os.Getenv("APELLIDO"),
+				DNI:        os.Getenv("DOCUMENTO"),
+				Nacimiento: os.Getenv("NACIMIENTO"),
+				Numero:     os.Getenv("NUMERO"),
+			}
+			
+			client := common.NewClient(clientConfig)
+			client.StartClientLoop(bet)
+			return
+		}
+		
+		log.Infof("Leyendo %d apuestas desde archivo %s", len(bets), filename)
+		
+		// Procesar en batches
+		client := common.NewClient(clientConfig)
+		client.StartBatchProcessing(bets, maxBatchSize)
+	} else {
+		// Modo individual: apuesta única
+		bet := common.Bet{
+			Nombre:     os.Getenv("NOMBRE"),
+			Apellido:   os.Getenv("APELLIDO"),
+			DNI:        os.Getenv("DOCUMENTO"),
+			Nacimiento: os.Getenv("NACIMIENTO"),
+			Numero:     os.Getenv("NUMERO"),
+		}
+		
+		// Log para debug de las variables de entorno
+		log.Infof("DEBUG: bet_config - nombre: '%s' | apellido: '%s' | dni: '%s' | nacimiento: '%s' | numero: '%s'",
+			bet.Nombre, bet.Apellido, bet.DNI, bet.Nacimiento, bet.Numero)
+		
+		client := common.NewClient(clientConfig)
+		client.StartClientLoop(bet)
 	}
-
-	// Log para debug de las variables de entorno (sin formato de acción para no interferir con el parser)
-	log.Infof("DEBUG: bet_config - nombre: '%s' | apellido: '%s' | dni: '%s' | nacimiento: '%s' | numero: '%s'",
-		bet.Nombre, bet.Apellido, bet.DNI, bet.Nacimiento, bet.Numero)
-
-	client := common.NewClient(clientConfig)
-	client.StartClientLoop(bet)
 }

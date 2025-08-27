@@ -180,3 +180,76 @@ func (c *Client) StartClientLoop(bet Bet) {
 	
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
+
+func (c *Client) StartBatchProcessing(bets []Bet, maxBatchSize int) {
+	// Set up signal handlers for graceful shutdown
+	c.setupSignalHandlers()
+	
+	log.Info("action: batch_processing_start | result: success")
+	
+	// Crear conexión TCP
+	if err := c.createClientSocket(); err != nil {
+		log.Errorf("action: connect | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return
+	}
+	defer c.closeClientSocket()
+
+	totalBets := len(bets)
+	processedBets := 0
+
+	// Procesar apuestas en batches
+	for i := 0; i < totalBets; i += maxBatchSize {
+		// Check if shutdown was requested
+		select {
+		case <-c.ctx.Done():
+			log.Info("action: batch_processing | result: interrupted")
+			return
+		default:
+			// Continue with normal operation
+		}
+		
+		end := i + maxBatchSize
+		if end > totalBets {
+			end = totalBets
+		}
+
+		batch := bets[i:end]
+		batchSize := len(batch)
+
+		// Enviar batch
+		err := c.protocol.SendBatch(c.conn, batch)
+		if err != nil {
+			log.Errorf("action: send_batch | result: fail | client_id: %v | batch: %d-%d | error: %v",
+				c.config.ID, i+1, end, err,
+			)
+			continue
+		}
+
+		// Recibir respuesta
+		success, _, _, err := c.protocol.ReceiveResponse(c.conn)
+		if err != nil {
+			log.Errorf("action: receive_batch_response | result: fail | client_id: %v | batch: %d-%d | error: %v",
+				c.config.ID, i+1, end, err,
+			)
+			continue
+		}
+
+		if success {
+			processedBets += batchSize
+			log.Infof("action: batch_processed | result: success | client_id: %v | batch: %d-%d | cantidad: %d",
+				c.config.ID, i+1, end, batchSize,
+			)
+		} else {
+			log.Errorf("action: batch_processed | result: fail | client_id: %v | batch: %d-%d | cantidad: %d",
+				c.config.ID, i+1, end, batchSize,
+			)
+		}
+	}
+
+	log.Infof("action: batch_processing_complete | result: success | client_id: %v | processed: %d/%d",
+		c.config.ID, processedBets, totalBets,
+	)
+}

@@ -14,6 +14,7 @@ class Protocol:
     
     # Tipos de mensaje
     MSG_BET = 0x01
+    MSG_BATCH = 0x02
     MSG_SUCCESS = 0x03
     MSG_ERROR = 0x04
 
@@ -189,6 +190,187 @@ class Protocol:
         msg_type = self.MSG_SUCCESS if success else self.MSG_ERROR
         payload = self.encode_response(dni, numero)
         return self.send_message(client_sock, msg_type, payload)
+    
+    def decode_batch(self, payload: bytes) -> Optional[List[Bet]]:
+        """
+        Decodifica un batch de apuestas desde el payload
+        """
+        try:
+            offset = 0
+            
+            # Leer cantidad de apuestas (4 bytes)
+            if offset + 4 > len(payload):
+                raise ValueError("Datos insuficientes para decodificar cantidad")
+            
+            cantidad = struct.unpack('!I', payload[offset:offset+4])[0]
+            offset += 4
+            
+            bets = []
+            for _ in range(cantidad):
+                # Leer longitud de la apuesta (4 bytes)
+                if offset + 4 > len(payload):
+                    raise ValueError("Datos insuficientes para decodificar longitud de apuesta")
+                
+                bet_length = struct.unpack('!I', payload[offset:offset+4])[0]
+                offset += 4
+                
+                # Leer apuesta
+                if offset + bet_length > len(payload):
+                    raise ValueError("Datos insuficientes para decodificar apuesta")
+                
+                bet_data = payload[offset:offset+bet_length]
+                bet = self.decode_bet(bet_data)
+                if not bet:
+                    raise ValueError("Error decodificando apuesta individual")
+                
+                bets.append(bet)
+                offset += bet_length
+            
+            return bets
+            
+        except Exception as e:
+            logging.error(f"action: decode_batch | result: fail | error: {e}")
+            return None
+    
+    def receive_batch(self, client_sock: socket.socket) -> Optional[List[Bet]]:
+        """
+        Recibe un batch de apuestas del cliente
+        """
+        result = self.receive_message(client_sock)
+        if not result:
+            return None
+        
+        msg_type, payload = result
+        
+        if msg_type != self.MSG_BATCH:
+            logging.error(f"action: receive_batch | result: fail | error: unexpected message type {msg_type}")
+            return None
+        
+        return self.decode_batch(payload)
+    
+    def process_batch(self, client_sock: socket.socket) -> bool:
+        """
+        Procesa un batch de apuestas: recibe, almacena todas y responde
+        """
+        # Recibir batch de apuestas
+        bets = self.receive_batch(client_sock)
+        if not bets:
+            return False
+        
+        cantidad = len(bets)
+        success = True
+        
+        try:
+            # Almacenar todas las apuestas
+            for bet in bets:
+                try:
+                    store_bet(bet)
+                    logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
+                except Exception as e:
+                    logging.error(f"action: apuesta_almacenada | result: fail | dni: {bet.document} | numero: {bet.number} | error: {e}")
+                    success = False
+                    break
+            
+            # Log del resultado del batch
+            if success:
+                logging.info(f"action: apuesta_recibida | result: success | cantidad: {cantidad}")
+            else:
+                logging.error(f"action: apuesta_recibida | result: fail | cantidad: {cantidad}")
+            
+            # Enviar respuesta de confirmación (usamos la primera apuesta como referencia)
+            first_bet = bets[0]
+            return self.send_response(client_sock, success, first_bet.document, str(first_bet.number))
+            
+        except Exception as e:
+            logging.error(f"action: process_batch | result: fail | error: {e}")
+            # Enviar respuesta de error
+            first_bet = bets[0] if bets else None
+            if first_bet:
+                self.send_response(client_sock, False, first_bet.document, str(first_bet.number))
+            return False
+    
+    def process_message(self, client_sock: socket.socket) -> bool:
+        """
+        Procesa un mensaje (apuesta individual o batch) y determina el tipo automáticamente
+        """
+        # Recibir mensaje para determinar el tipo
+        result = self.receive_message(client_sock)
+        if not result:
+            return False
+        
+        msg_type, payload = result
+        
+        if msg_type == self.MSG_BATCH:
+            return self._process_batch_from_payload(client_sock, payload)
+        elif msg_type == self.MSG_BET:
+            return self._process_bet_from_payload(client_sock, payload)
+        else:
+            logging.error(f"action: process_message | result: fail | error: unknown message type {msg_type}")
+            return False
+    
+    def _process_bet_from_payload(self, client_sock: socket.socket, payload: bytes) -> bool:
+        """
+        Procesa una apuesta individual desde el payload ya recibido
+        """
+        bet = self.decode_bet(payload)
+        if not bet:
+            return False
+        
+        try:
+            # Almacenar apuesta
+            store_bet(bet)
+            
+            # Log de confirmación
+            logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
+            
+            # Enviar respuesta de confirmación
+            return self.send_response(client_sock, True, bet.document, str(bet.number))
+            
+        except Exception as e:
+            logging.error(f"action: process_bet | result: fail | error: {e}")
+            # Enviar respuesta de error
+            self.send_response(client_sock, False, bet.document, str(bet.number))
+            return False
+    
+    def _process_batch_from_payload(self, client_sock: socket.socket, payload: bytes) -> bool:
+        """
+        Procesa un batch de apuestas desde el payload ya recibido
+        """
+        bets = self.decode_batch(payload)
+        if not bets:
+            return False
+        
+        cantidad = len(bets)
+        success = True
+        
+        try:
+            # Almacenar todas las apuestas
+            for bet in bets:
+                try:
+                    store_bet(bet)
+                    logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
+                except Exception as e:
+                    logging.error(f"action: apuesta_almacenada | result: fail | dni: {bet.document} | numero: {bet.number} | error: {e}")
+                    success = False
+                    break
+            
+            # Log del resultado del batch
+            if success:
+                logging.info(f"action: apuesta_recibida | result: success | cantidad: {cantidad}")
+            else:
+                logging.error(f"action: apuesta_recibida | result: fail | cantidad: {cantidad}")
+            
+            # Enviar respuesta de confirmación (usamos la primera apuesta como referencia)
+            first_bet = bets[0]
+            return self.send_response(client_sock, success, first_bet.document, str(first_bet.number))
+            
+        except Exception as e:
+            logging.error(f"action: process_batch | result: fail | error: {e}")
+            # Enviar respuesta de error
+            first_bet = bets[0] if bets else None
+            if first_bet:
+                self.send_response(client_sock, False, first_bet.document, str(first_bet.number))
+            return False
     
     def process_bet(self, client_sock: socket.socket) -> bool:
         """

@@ -98,8 +98,8 @@ class Server:
             self._active_connections.append(client_sock)
         
         try:
-            # Process bet using protocol
-            success = self._protocol.process_bet(client_sock)
+            # Process bet or batch using protocol
+            success = self._protocol.process_message(client_sock)
             addr = client_sock.getpeername()
             if success:
                 logging.info(f'action: bet_processed | result: success | ip: {addr[0]}')
