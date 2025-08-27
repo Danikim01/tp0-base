@@ -1,34 +1,37 @@
 package common
 
 import (
-	"bufio"
-	"encoding/json"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
 )
 
+// Constantes del protocolo
+const (
+	DELIMITER        = 0xFF
+	HEADER_SIZE      = 5 // 4 bytes longitud + 1 byte tipo
+	MAX_MESSAGE_SIZE = 8192 // 8KB máximo
+)
+
+// Tipos de mensaje
+const (
+	MSG_BET             = 0x01
+	MSG_BATCH           = 0x02
+	MSG_SUCCESS         = 0x03
+	MSG_ERROR           = 0x04
+	MSG_FINISH          = 0x05
+	MSG_WINNERS_QUERY   = 0x06
+	MSG_WINNERS_RESPONSE = 0x07
+)
+
 // Bet representa una apuesta de quiniela
 type Bet struct {
-	Nombre    string `json:"nombre"`
-	Apellido  string `json:"apellido"`
-	DNI       string `json:"dni"`
-	Nacimiento string `json:"nacimiento"`
-	Numero    string `json:"numero"`
-}
-
-// BetRequest representa el mensaje de solicitud de apuesta
-type BetRequest struct {
-	Type string `json:"type"`
-	Bet  Bet    `json:"bet"`
-}
-
-// BetResponse representa la respuesta del servidor
-type BetResponse struct {
-	Type   string `json:"type"`
-	Status string `json:"status"`
-	DNI    string `json:"dni"`
-	Numero string `json:"numero"`
+	Nombre     string
+	Apellido   string
+	DNI        string
+	Nacimiento string
+	Numero     string
 }
 
 // Protocol maneja la comunicación entre cliente y servidor
@@ -39,56 +42,204 @@ func NewProtocol() *Protocol {
 	return &Protocol{}
 }
 
-// SendBet envía una apuesta al servidor evitando short-write
-func (p *Protocol) SendBet(conn net.Conn, bet Bet) error {
-	request := BetRequest{
-		Type: "bet",
-		Bet:  bet,
+// readExact lee exactamente 'size' bytes del socket
+func (p *Protocol) readExact(conn net.Conn, size int) ([]byte, error) {
+	data := make([]byte, size)
+	totalRead := 0
+	
+	for totalRead < size {
+		n, err := conn.Read(data[totalRead:])
+		if err != nil {
+			return nil, fmt.Errorf("error leyendo datos: %v", err)
+		}
+		if n == 0 {
+			return nil, fmt.Errorf("conexión cerrada por el servidor")
+		}
+		totalRead += n
 	}
 	
-	data, err := json.Marshal(request)
-	if err != nil {
-		return fmt.Errorf("error serializando apuesta: %v", err)
-	}
-	
-	// Agregar delimitador de mensaje
-	message := append(data, '\n')
-	
-	// Enviar datos completos evitando short-write
-	return p.sendComplete(conn, message)
+	return data, nil
 }
 
-// sendComplete envía todos los datos evitando short-write
-func (p *Protocol) sendComplete(conn net.Conn, data []byte) error {
+// writeExact escribe exactamente todos los datos al socket
+func (p *Protocol) writeExact(conn net.Conn, data []byte) error {
 	totalSent := 0
+	
 	for totalSent < len(data) {
 		n, err := conn.Write(data[totalSent:])
 		if err != nil {
 			return fmt.Errorf("error escribiendo datos: %v", err)
 		}
+		if n == 0 {
+			return fmt.Errorf("conexión rota")
+		}
 		totalSent += n
 	}
+	
 	return nil
 }
 
-// ReceiveResponse recibe la respuesta del servidor evitando short-read
-func (p *Protocol) ReceiveResponse(conn net.Conn) (*BetResponse, error) {
-	reader := bufio.NewReader(conn)
+// encodeString codifica una string con su longitud
+func (p *Protocol) encodeString(s string) []byte {
+	encoded := []byte(s)
+	length := uint16(len(encoded))
 	
-	// Leer hasta el delimitador de línea
-	line, err := reader.ReadString('\n')
+	result := make([]byte, 2+len(encoded))
+	binary.BigEndian.PutUint16(result[0:2], length)
+	copy(result[2:], encoded)
+	
+	return result
+}
+
+// decodeString decodifica una string con su longitud
+func (p *Protocol) decodeString(data []byte, offset int) (string, int, error) {
+	if offset+2 > len(data) {
+		return "", offset, fmt.Errorf("datos insuficientes para decodificar string")
+	}
+	
+	length := binary.BigEndian.Uint16(data[offset : offset+2])
+	offset += 2
+	
+	if offset+int(length) > len(data) {
+		return "", offset, fmt.Errorf("datos insuficientes para decodificar string")
+	}
+	
+	stringData := data[offset : offset+int(length)]
+	return string(stringData), offset + int(length), nil
+}
+
+// SendMessage envía un mensaje completo al servidor
+func (p *Protocol) SendMessage(conn net.Conn, msgType byte, payload []byte) error {
+	// Construir mensaje completo
+	header := make([]byte, HEADER_SIZE)
+	binary.BigEndian.PutUint32(header[0:4], uint32(len(payload)))
+	header[4] = msgType
+	
+	message := append(header, payload...)
+	message = append(message, DELIMITER)
+	
+	// Enviar mensaje completo
+	return p.writeExact(conn, message)
+}
+
+// ReceiveMessage recibe un mensaje completo del servidor
+func (p *Protocol) ReceiveMessage(conn net.Conn) (byte, []byte, error) {
+	// Leer header (longitud + tipo)
+	header, err := p.readExact(conn, HEADER_SIZE)
 	if err != nil {
-		if err == io.EOF {
-			return nil, fmt.Errorf("conexión cerrada por el servidor")
-		}
-		return nil, fmt.Errorf("error leyendo respuesta: %v", err)
+		return 0, nil, fmt.Errorf("error leyendo header: %v", err)
 	}
 	
-	// Parsear la respuesta JSON
-	var response BetResponse
-	if err := json.Unmarshal([]byte(line), &response); err != nil {
-		return nil, fmt.Errorf("error parseando respuesta: %v", err)
+	// Parsear header
+	payloadLength := binary.BigEndian.Uint32(header[0:4])
+	msgType := header[4]
+	
+	// Validar longitud
+	if payloadLength > MAX_MESSAGE_SIZE {
+		return 0, nil, fmt.Errorf("mensaje demasiado grande (%d bytes)", payloadLength)
 	}
 	
-	return &response, nil
+	// Leer payload
+	payload, err := p.readExact(conn, int(payloadLength))
+	if err != nil {
+		return 0, nil, fmt.Errorf("error leyendo payload: %v", err)
+	}
+	
+	// Leer delimitador
+	delimiter, err := p.readExact(conn, 1)
+	if err != nil {
+		return 0, nil, fmt.Errorf("error leyendo delimitador: %v", err)
+	}
+	
+	if delimiter[0] != DELIMITER {
+		return 0, nil, fmt.Errorf("delimitador inválido")
+	}
+	
+	return msgType, payload, nil
+}
+
+// EncodeBet codifica una apuesta a bytes
+func (p *Protocol) EncodeBet(bet Bet) []byte {
+	payload := make([]byte, 0)
+	payload = append(payload, p.encodeString(bet.Nombre)...)
+	payload = append(payload, p.encodeString(bet.Apellido)...)
+	payload = append(payload, p.encodeString(bet.DNI)...)
+	payload = append(payload, p.encodeString(bet.Nacimiento)...)
+	payload = append(payload, p.encodeString(bet.Numero)...)
+	return payload
+}
+
+// DecodeBet decodifica una apuesta desde el payload
+func (p *Protocol) DecodeBet(payload []byte) (Bet, error) {
+	var bet Bet
+	offset := 0
+	
+	// Decodificar campos
+	nombre, offset, err := p.decodeString(payload, offset)
+	if err != nil {
+		return bet, fmt.Errorf("error decodificando nombre: %v", err)
+	}
+	
+	apellido, offset, err := p.decodeString(payload, offset)
+	if err != nil {
+		return bet, fmt.Errorf("error decodificando apellido: %v", err)
+	}
+	
+	dni, offset, err := p.decodeString(payload, offset)
+	if err != nil {
+		return bet, fmt.Errorf("error decodificando DNI: %v", err)
+	}
+	
+	nacimiento, offset, err := p.decodeString(payload, offset)
+	if err != nil {
+		return bet, fmt.Errorf("error decodificando nacimiento: %v", err)
+	}
+	
+	numero, offset, err := p.decodeString(payload, offset)
+	if err != nil {
+		return bet, fmt.Errorf("error decodificando numero: %v", err)
+	}
+	
+	bet = Bet{
+		Nombre:     nombre,
+		Apellido:   apellido,
+		DNI:        dni,
+		Nacimiento: nacimiento,
+		Numero:     numero,
+	}
+	
+	return bet, nil
+}
+
+// SendBet envía una apuesta al servidor
+func (p *Protocol) SendBet(conn net.Conn, bet Bet) error {
+	payload := p.EncodeBet(bet)
+	return p.SendMessage(conn, MSG_BET, payload)
+}
+
+// ReceiveResponse recibe la respuesta del servidor
+func (p *Protocol) ReceiveResponse(conn net.Conn) (bool, string, string, error) {
+	msgType, payload, err := p.ReceiveMessage(conn)
+	if err != nil {
+		return false, "", "", fmt.Errorf("error recibiendo respuesta: %v", err)
+	}
+	
+	if msgType != MSG_SUCCESS && msgType != MSG_ERROR {
+		return false, "", "", fmt.Errorf("tipo de mensaje inesperado: %d", msgType)
+	}
+	
+	// Decodificar respuesta
+	offset := 0
+	dni, offset, err := p.decodeString(payload, offset)
+	if err != nil {
+		return false, "", "", fmt.Errorf("error decodificando DNI en respuesta: %v", err)
+	}
+	
+	numero, offset, err := p.decodeString(payload, offset)
+	if err != nil {
+		return false, "", "", fmt.Errorf("error decodificando numero en respuesta: %v", err)
+	}
+	
+	success := msgType == MSG_SUCCESS
+	return success, dni, numero, nil
 }

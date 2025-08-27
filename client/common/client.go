@@ -143,7 +143,7 @@ func (c *Client) StartClientLoop(bet Bet) {
 		}
 
 		// Recibir respuesta del servidor
-		response, err := c.protocol.ReceiveResponse(c.conn)
+		success, dni, numero, err := c.protocol.ReceiveResponse(c.conn)
 		c.closeClientSocket()
 
 		if err != nil {
@@ -155,15 +155,15 @@ func (c *Client) StartClientLoop(bet Bet) {
 		}
 
 		// Log de confirmación según el formato requerido
-		if response.Status == "success" {
+		if success {
 			log.Infof("action: apuesta_enviada | result: success | dni: %s | numero: %s",
-				response.DNI,
-				response.Numero,
+				dni,
+				numero,
 			)
 		} else {
 			log.Errorf("action: apuesta_enviada | result: fail | dni: %s | numero: %s",
-				response.DNI,
-				response.Numero,
+				dni,
+				numero,
 			)
 		}
 

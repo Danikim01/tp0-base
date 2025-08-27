@@ -4,7 +4,12 @@ import time
 
 
 """ Bets storage location. """
-STORAGE_FILEPATH = "./data/bets.csv"
+import os
+
+# Obtener el directorio del script actual
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Construir path absoluto al archivo de datos
+STORAGE_FILEPATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "data", "bets.csv"))
 """ Simulated winner number in the lottery contest. """
 LOTTERY_WINNER_NUMBER = 7574
 

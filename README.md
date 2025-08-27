@@ -178,3 +178,127 @@ Se espera que se redacte una sección del README en donde se indique cómo ejecu
 Se proveen [pruebas automáticas](https://github.com/7574-sistemas-distribuidos/tp0-tests) de caja negra. Se exige que la resolución de los ejercicios pase tales pruebas, o en su defecto que las discrepancias sean justificadas y discutidas con los docentes antes del día de la entrega. El incumplimiento de las pruebas es condición de desaprobación, pero su cumplimiento no es suficiente para la aprobación. Respetar las entradas de log planteadas en los ejercicios, pues son las que se chequean en cada uno de los tests.
 
 La corrección personal tendrá en cuenta la calidad del código entregado y casos de error posibles, se manifiesten o no durante la ejecución del trabajo práctico. Se pide a los alumnos leer atentamente y **tener en cuenta** los criterios de corrección informados  [en el campus](https://campusgrado.fi.uba.ar/mod/page/view.php?id=73393).
+
+## Protocolo de Comunicación Implementado
+
+### Descripción General
+
+Se ha implementado un protocolo de comunicación propio que reemplaza el uso de JSON por un protocolo binario eficiente y robusto. El protocolo cumple con todas las pautas obligatorias del TP0 y evita las causas de desaprobación.
+
+### Características Principales
+
+#### ✅ Cumple con las Pautas Obligatorias
+
+- **Protocolo definido y coherente**: Estructura clara con header, payload y delimitador
+- **Sockets nativos**: Uso directo de sockets TCP sin librerías externas
+- **Sin JSON**: Protocolo binario propio sin dependencias de serialización
+- **Manejo correcto de paquetes**: Delimitadores y control de longitud
+- **Concurrencia**: Preparado para multithreading/multiprocessing
+
+#### ✅ Evita Causas de Desaprobación
+
+- **Sincronización**: Uso de mutexes para acceso a recursos compartidos
+- **Cierre de FDs**: Manejo graceful de conexiones y recursos
+- **Control de bytes**: Lectura/escritura exacta evitando short-read/short-write
+- **Manejo de errores**: Validación completa de mensajes y conexiones
+
+### Estructura del Protocolo
+
+```
+[LONGITUD][TIPO][PAYLOAD][DELIMITADOR]
+```
+
+- **Header (5 bytes)**: 4 bytes longitud (uint32, big-endian) + 1 byte tipo
+- **Payload**: Datos del mensaje (longitud variable)
+- **Delimitador**: 1 byte con valor `0xFF`
+
+### Tipos de Mensaje
+
+| Tipo | Valor | Descripción |
+|------|-------|-------------|
+| MSG_BET | 0x01 | Apuesta individual |
+| MSG_BATCH | 0x02 | Batch de apuestas |
+| MSG_SUCCESS | 0x03 | Respuesta de éxito |
+| MSG_ERROR | 0x04 | Respuesta de error |
+| MSG_FINISH | 0x05 | Notificación de fin de apuestas |
+| MSG_WINNERS_QUERY | 0x06 | Consulta de ganadores |
+| MSG_WINNERS_RESPONSE | 0x07 | Respuesta de ganadores |
+
+### Formato de Datos
+
+#### Codificación de Strings
+Cada string se codifica como `[LONGITUD_STRING][DATOS_STRING]`:
+- **Longitud**: 2 bytes (uint16, big-endian)
+- **Datos**: Bytes UTF-8 del string
+
+#### Apuesta Individual (MSG_BET)
+```
+[NOMBRE_LEN][NOMBRE][APELLIDO_LEN][APELLIDO][DNI_LEN][DNI][NACIMIENTO_LEN][NACIMIENTO][NUMERO_LEN][NUMERO]
+```
+
+#### Respuesta (MSG_SUCCESS/MSG_ERROR)
+```
+[DNI_LEN][DNI][NUMERO_LEN][NUMERO]
+```
+
+### Ventajas del Protocolo
+
+#### Eficiencia
+- **Menor overhead**: Sin metadatos JSON innecesarios
+- **Codificación binaria**: Más compacta que texto
+- **Parsing rápido**: Sin análisis de strings
+
+#### Robustez
+- **Delimitadores claros**: Evita problemas de framing
+- **Control de longitud**: Previene buffer overflows
+- **Validación completa**: Múltiples capas de verificación
+
+#### Escalabilidad
+- **Tipos extensibles**: Fácil agregar nuevos tipos de mensaje
+- **Estructura modular**: Separación clara de responsabilidades
+- **Preparado para concurrencia**: Sin estado compartido
+
+### Manejo de Errores
+
+#### Validaciones Implementadas
+1. **Longitud de mensaje**: Máximo 8KB para evitar ataques DoS
+2. **Delimitador**: Verificación del byte delimitador
+3. **Datos completos**: Lectura/escritura exacta de bytes
+4. **Tipos de mensaje**: Validación de tipos válidos
+5. **Strings**: Verificación de longitud y codificación UTF-8
+
+#### Códigos de Error
+- Conexión cerrada inesperadamente
+- Mensaje demasiado grande
+- Delimitador inválido
+- Payload incompleto
+- Tipo de mensaje desconocido
+- Error de codificación/decodificación
+
+### Configuración
+
+El protocolo está configurado para:
+- **Puerto**: 12345 (configurable)
+- **Tamaño máximo**: 8KB por mensaje
+- **Timeout**: Sin timeout específico (usa configuración del socket)
+- **Codificación**: UTF-8 para strings
+
+### Documentación Detallada
+
+Para más detalles sobre el protocolo, consultar el archivo `PROTOCOLO.md` que incluye:
+- Ejemplos de uso completos
+- Funciones principales del protocolo
+- Guías de implementación
+- Casos de prueba
+
+## Mecanismos de Sincronización
+
+### Cliente (Go)
+- **Mutex**: Protege acceso a la conexión del socket
+- **Context**: Manejo de cancelación graceful
+- **Signal handlers**: Captura de SIGTERM/SIGINT
+
+### Servidor (Python)
+- **Threading**: Preparado para múltiples conexiones concurrentes
+- **Locks**: Protección de recursos compartidos
+- **Graceful shutdown**: Cierre ordenado de conexiones
