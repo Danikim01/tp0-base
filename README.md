@@ -4,7 +4,7 @@ En el presente repositorio se provee un esqueleto básico de cliente/servidor, e
 
 El cliente (Golang) y el servidor (Python) fueron desarrollados en diferentes lenguajes simplemente para mostrar cómo dos lenguajes de programación pueden convivir en el mismo proyecto con la ayuda de containers, en este caso utilizando [Docker Compose](https://docs.docker.com/compose/).
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Ejecución Rápida con Docker (Recomendado)
 
@@ -19,14 +19,11 @@ make docker-compose-up
 # 3. Ver los logs
 make docker-compose-logs
 
-# 4. Probar el protocolo
-make test-protocol
-
-# 5. Detener el sistema
+# 4. Detener el sistema
 make docker-compose-down
 ```
 
-### Ejecución Local
+### Ejecución Local (con 1 cliente)
 
 ```bash
 # 1. Compilar el cliente
@@ -36,7 +33,7 @@ make build
 cd server && python3 main.py
 
 # 3. Iniciar cliente (terminal 2)
-# Desde el directorio raíz del proyecto:
+# Desde el directorio raíz del proyecto hay que setear las variables de entorno y ejecutar el cliente:
 export NOMBRE="Santiago Lionel"
 export APELLIDO="Lorca"
 export DOCUMENTO="30904465"
@@ -62,10 +59,8 @@ Los targets disponibles son:
 |  `docker-compose-logs` | Permite ver los logs actuales del proyecto. Acompañar con `grep` para lograr ver mensajes de una aplicación específica dentro del compose. |
 | `docker-image`  | Construye las imágenes a ser utilizadas tanto en el servidor como en el cliente. Este target es utilizado por **docker-compose-up**, por lo cual se lo puede utilizar para probar nuevos cambios en las imágenes antes de arrancar el proyecto. |
 | `build` | Compila la aplicación cliente para ejecución en el _host_ en lugar de en Docker. De este modo la compilación es mucho más veloz, pero requiere contar con todo el entorno de Golang y Python instalados en la máquina _host_. |
-| `test-protocol` | Ejecuta las pruebas del protocolo de comunicación propio. |
-| `test-all` | Ejecuta todas las pruebas disponibles. |
 
-#### 🐳 Pasos para ejecutar con Docker:
+#### Pasos para ejecutar con Docker:
 
 1. **Iniciar el sistema completo:**
    ```bash
@@ -82,12 +77,7 @@ Los targets disponibles son:
    make docker-compose-down
    ```
 
-4. **Probar el protocolo:**
-   ```bash
-   make test-protocol
-   ```
-
-### 💻 Ejecución Local (Desarrollo)
+### Ejecución Local (Desarrollo)
 
 Si prefieres ejecutar el sistema localmente sin Docker, sigue estos pasos:
 
@@ -208,11 +198,6 @@ docker logs server
 docker logs client1
 ```
 
-#### Probar el protocolo:
-```bash
-make test-protocol
-```
-
 ### 📝 Ejemplo de Ejecución Completa
 
 ```bash
@@ -222,10 +207,7 @@ make docker-compose-up
 # 2. Ver logs
 make docker-compose-logs
 
-# 3. En otra terminal, probar el protocolo
-make test-protocol
-
-# 4. Detener el sistema
+# 3. Detener el sistema
 make docker-compose-down
 ```
 

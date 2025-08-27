@@ -16,4 +16,3 @@ test-graceful-shutdown.sh
 server/data/bets.csv
 run-local.sh
 test-quiniela.sh
-docker-compose-quiniela.yaml
