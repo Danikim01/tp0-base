@@ -43,11 +43,7 @@ func (bp *BatchProcessor) ReadBetsFromCSV(filename string) ([]Bet, error) {
 
 	reader := csv.NewReader(file)
 	
-	// Leer header (opcional)
-	_, err = reader.Read()
-	if err != nil {
-		return nil, fmt.Errorf("error leyendo header: %v", err)
-	}
+	// No hay header en el CSV, empezamos directamente con los datos
 
 	var bets []Bet
 	for {
@@ -59,17 +55,17 @@ func (bp *BatchProcessor) ReadBetsFromCSV(filename string) ([]Bet, error) {
 			return nil, fmt.Errorf("error leyendo registro: %v", err)
 		}
 
-		// Parsear registro CSV
-		if len(record) < 6 {
+		// Parsear registro CSV (formato: nombre,apellido,documento,nacimiento,numero)
+		if len(record) < 5 {
 			continue // Saltar registros incompletos
 		}
 
 		bet := Bet{
-			Nombre:     strings.TrimSpace(record[1]),
-			Apellido:   strings.TrimSpace(record[2]),
-			DNI:        strings.TrimSpace(record[3]),
-			Nacimiento: strings.TrimSpace(record[4]),
-			Numero:     strings.TrimSpace(record[5]),
+			Nombre:     strings.TrimSpace(record[0]),
+			Apellido:   strings.TrimSpace(record[1]),
+			DNI:        strings.TrimSpace(record[2]),
+			Nacimiento: strings.TrimSpace(record[3]),
+			Numero:     strings.TrimSpace(record[4]),
 		}
 
 		// Validar que los campos no estén vacíos
