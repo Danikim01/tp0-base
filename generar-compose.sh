@@ -36,6 +36,7 @@ services:
     volumes:
       - ./server/config.ini:/config.ini:ro
       - ./.data:/data:ro
+      - ./server/data:/server_data
     networks:
       - testing_net
 EOF
@@ -61,6 +62,7 @@ for i in $(seq 1 $CANTIDAD_CLIENTES); do
       - NUMERO=7574
     volumes:
       - ./client/config.yaml:/config.yaml:ro
+      - ./.data:/data:ro
     networks:
       - testing_net
     depends_on:

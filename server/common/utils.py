@@ -9,7 +9,18 @@ import os
 # Obtener el directorio del script actual
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Construir path absoluto al archivo de datos
-STORAGE_FILEPATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "data", "bets.csv"))
+# En Docker, escribir en /server_data para evitar problemas con volúmenes de solo lectura
+if os.path.exists('/server_data'):
+    STORAGE_FILEPATH = "/server_data/bets.csv"
+elif os.path.exists('/tmp'):
+    STORAGE_FILEPATH = "/tmp/bets.csv"
+else:
+    STORAGE_FILEPATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "data", "bets.csv"))
+
+# Asegurar que el directorio existe
+STORAGE_DIR = os.path.dirname(STORAGE_FILEPATH)
+if not os.path.exists(STORAGE_DIR):
+    os.makedirs(STORAGE_DIR, exist_ok=True)
 """ Simulated winner number in the lottery contest. """
 LOTTERY_WINNER_NUMBER = 7574
 

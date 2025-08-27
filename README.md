@@ -483,6 +483,14 @@ batch:
   maxAmount: 50  # Máximo 50 apuestas por batch (ajustado para < 8KB)
 ```
 
+### Almacenamiento de Apuestas
+
+Las apuestas procesadas se almacenan en:
+- **Local**: `./server/data/bets.csv`
+- **Docker**: `/server_data/bets.csv` (dentro del contenedor)
+
+El directorio `server/data/` se incluye en el repositorio para asegurar que funcione correctamente cuando alguien clone el proyecto. El archivo `bets.csv` se ignora en Git para evitar conflictos entre diferentes ejecuciones.
+
 ### Logs del Servidor
 
 - **Éxito**: `action: apuesta_recibida | result: success | cantidad: ${CANTIDAD}`
