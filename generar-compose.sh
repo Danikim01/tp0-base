@@ -35,6 +35,7 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./server/config.ini:/config.ini:ro
+      - ./.data:/data:ro
     networks:
       - testing_net
 EOF
