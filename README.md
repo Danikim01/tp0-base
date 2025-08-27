@@ -2,7 +2,42 @@
 
 En el presente repositorio se provee un esqueleto básico de cliente/servidor, en donde todas las dependencias del mismo se encuentran encapsuladas en containers. Los alumnos deberán resolver una guía de ejercicios incrementales, teniendo en cuenta las condiciones de entrega descritas al final de este enunciado.
 
- El cliente (Golang) y el servidor (Python) fueron desarrollados en diferentes lenguajes simplemente para mostrar cómo dos lenguajes de programación pueden convivir en el mismo proyecto con la ayuda de containers, en este caso utilizando [Docker Compose](https://docs.docker.com/compose/).
+El cliente (Golang) y el servidor (Python) fueron desarrollados en diferentes lenguajes simplemente para mostrar cómo dos lenguajes de programación pueden convivir en el mismo proyecto con la ayuda de containers, en este caso utilizando [Docker Compose](https://docs.docker.com/compose/).
+
+## 🚀 Quick Start
+
+### Ejecución Rápida con Docker (Recomendado)
+
+```bash
+# 1. Clonar el repositorio
+git clone <url-del-repositorio>
+cd tp0-base
+
+# 2. Iniciar el sistema completo
+make docker-compose-up
+
+# 3. Ver los logs
+make docker-compose-logs
+
+# 4. Probar el protocolo
+make test-protocol
+
+# 5. Detener el sistema
+make docker-compose-down
+```
+
+### Ejecución Local
+
+```bash
+# 1. Compilar el cliente
+make build
+
+# 2. Iniciar servidor (terminal 1)
+cd server && python3 main.py
+
+# 3. Iniciar cliente (terminal 2)
+./bin/client
+```
 
 ## Instrucciones de uso
 El repositorio cuenta con un **Makefile** que incluye distintos comandos en forma de targets. Los targets se ejecutan mediante la invocación de:  **make \<target\>**. Los target imprescindibles para iniciar y detener el sistema son **docker-compose-up** y **docker-compose-down**, siendo los restantes targets de utilidad para el proceso de depuración.
@@ -16,6 +51,153 @@ Los targets disponibles son:
 |  `docker-compose-logs` | Permite ver los logs actuales del proyecto. Acompañar con `grep` para lograr ver mensajes de una aplicación específica dentro del compose. |
 | `docker-image`  | Construye las imágenes a ser utilizadas tanto en el servidor como en el cliente. Este target es utilizado por **docker-compose-up**, por lo cual se lo puede utilizar para probar nuevos cambios en las imágenes antes de arrancar el proyecto. |
 | `build` | Compila la aplicación cliente para ejecución en el _host_ en lugar de en Docker. De este modo la compilación es mucho más veloz, pero requiere contar con todo el entorno de Golang y Python instalados en la máquina _host_. |
+| `test-protocol` | Ejecuta las pruebas del protocolo de comunicación propio. |
+| `test-all` | Ejecuta todas las pruebas disponibles. |
+
+#### 🐳 Pasos para ejecutar con Docker:
+
+1. **Iniciar el sistema completo:**
+   ```bash
+   make docker-compose-up
+   ```
+
+2. **Ver los logs en tiempo real:**
+   ```bash
+   make docker-compose-logs
+   ```
+
+3. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+4. **Probar el protocolo:**
+   ```bash
+   make test-protocol
+   ```
+
+### 💻 Ejecución Local (Desarrollo)
+
+Si prefieres ejecutar el sistema localmente sin Docker, sigue estos pasos:
+
+#### Prerrequisitos:
+- **Python 3.9+** instalado
+- **Go 1.19+** instalado
+- **Git** para clonar el repositorio
+
+#### Pasos para ejecución local:
+
+1. **Clonar el repositorio:**
+   ```bash
+   git clone <url-del-repositorio>
+   cd tp0-base
+   ```
+
+2. **Instalar dependencias Python:**
+   ```bash
+   cd server
+   pip install -r requirements.txt  # si existe
+   cd ..
+   ```
+
+3. **Compilar el cliente Go:**
+   ```bash
+   make build
+   ```
+
+4. **Iniciar el servidor (en una terminal):**
+   ```bash
+   cd server
+   python3 main.py
+   ```
+
+5. **Iniciar el cliente (en otra terminal):**
+   ```bash
+   ./bin/client
+   ```
+
+#### Configuración local:
+
+**Servidor (Python):**
+- Puerto por defecto: `12345`
+- Archivo de configuración: `server/config.ini`
+- Variables de entorno disponibles:
+  - `SERVER_PORT`: Puerto del servidor
+  - `SERVER_LISTEN_BACKLOG`: Backlog de conexiones
+  - `LOGGING_LEVEL`: Nivel de logging (DEBUG, INFO, WARNING, ERROR)
+
+**Cliente (Go):**
+- Archivo de configuración: `client/config.yaml`
+- Variables de entorno disponibles:
+  - `CLI_ID`: ID del cliente
+  - `CLI_SERVER_ADDRESS`: Dirección del servidor
+  - `CLI_LOOP_AMOUNT`: Cantidad de mensajes a enviar
+  - `CLI_LOOP_PERIOD`: Período entre mensajes
+  - `CLI_LOG_LEVEL`: Nivel de logging
+
+### 🔧 Configuración de Variables de Entorno
+
+#### Para el Cliente (Agencia de Quiniela):
+```bash
+export NOMBRE="Santiago Lionel"
+export APELLIDO="Lorca"
+export DOCUMENTO="30904465"
+export NACIMIENTO="1999-03-17"
+export NUMERO="7574"
+```
+
+#### Para el Servidor:
+```bash
+export SERVER_PORT="12345"
+export SERVER_LISTEN_BACKLOG="5"
+export LOGGING_LEVEL="INFO"
+```
+
+### 📊 Monitoreo y Debugging
+
+#### Ver logs del sistema:
+```bash
+# Con Docker
+make docker-compose-logs
+
+# Filtrar logs específicos
+make docker-compose-logs | grep "apuesta_enviada"
+make docker-compose-logs | grep "apuesta_almacenada"
+```
+
+#### Verificar estado de containers:
+```bash
+docker ps
+docker logs server
+docker logs client1
+```
+
+#### Probar el protocolo:
+```bash
+make test-protocol
+```
+
+### 📝 Ejemplo de Ejecución Completa
+
+```bash
+# 1. Iniciar el sistema
+make docker-compose-up
+
+# 2. Ver logs
+make docker-compose-logs
+
+# 3. En otra terminal, probar el protocolo
+make test-protocol
+
+# 4. Detener el sistema
+make docker-compose-down
+```
+
+**Salida esperada:**
+```
+client1  | action: apuesta_enviada | result: success | dni: 30904465 | numero: 7574
+server   | action: apuesta_almacenada | result: success | dni: 30904465 | numero: 7574
+```
 
 ### Servidor
 
