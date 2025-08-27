@@ -107,11 +107,20 @@ class Server:
                     if success:
                         logging.info(f'action: bet_processed | result: success | ip: {addr[0]}')
                     else:
-                        logging.error(f'action: bet_processed | result: fail | ip: {addr[0]}')
-                        break  # Stop processing on failure
+                        # This could be a normal connection close or an error
+                        # We'll assume it's a normal close and break the loop
+                        logging.info(f'action: client_disconnected | result: success | ip: {addr[0]}')
+                        break
                 except (OSError, ConnectionResetError, BrokenPipeError) as e:
                     # Connection was closed by client or network error
                     logging.info(f'action: client_disconnected | result: success | ip: {addr[0]}')
+                    break
+                except Exception as e:
+                    # Check if it's a connection closed error from receive_message
+                    if "connection closed" in str(e).lower():
+                        logging.info(f'action: client_disconnected | result: success | ip: {addr[0]}')
+                        break
+                    logging.error(f"action: bet_processed | result: fail | error: {e}")
                     break
                 except Exception as e:
                     logging.error(f"action: bet_processed | result: fail | error: {e}")

@@ -69,7 +69,7 @@ class Protocol:
             # Leer header (longitud + tipo)
             header = self._read_exact(client_sock, self.HEADER_SIZE)
             if not header:
-                logging.error("action: receive_message | result: fail | error: connection closed")
+                # Connection was closed by client, this is normal
                 return None
             
             # Parsear header
