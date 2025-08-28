@@ -200,12 +200,12 @@ class Server:
                                 if not self._lottery_completed:
                                     # Lottery not completed yet, send empty response
                                     self._protocol.send_winners_response(client_sock, [])
-                                    logging.warning(f'action: winners_query | result: pending | agency: {agency_id}')
+                                    #logging.warning(f'action: winners_query | result: pending | agency: {agency_id}')
                                 else:
                                     # Get winners for this agency
                                     winners = self._get_winners_for_agency(agency_id)
                                     self._protocol.send_winners_response(client_sock, winners)
-                                    logging.info(f'action: winners_query | result: success | agency: {agency_id} | winners: {len(winners)}')
+                                    #logging.info(f'action: winners_query | result: success | agency: {agency_id} | winners: {len(winners)}')
                         except Exception as e:
                             logging.error(f'action: winners_query | result: fail | ip: {addr[0]} | error: {e}')
                             break
