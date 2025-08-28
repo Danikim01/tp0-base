@@ -125,6 +125,7 @@ class Protocol:
             offset = 0
             
             # Decodificar campos
+            agency, offset = self._decode_string(payload, offset)
             nombre, offset = self._decode_string(payload, offset)
             apellido, offset = self._decode_string(payload, offset)
             dni, offset = self._decode_string(payload, offset)
@@ -133,7 +134,7 @@ class Protocol:
             
             # Crear objeto Bet
             bet = Bet(
-                agency="1",  # Por defecto
+                agency=agency,
                 first_name=nombre,
                 last_name=apellido,
                 document=dni,
@@ -152,6 +153,7 @@ class Protocol:
         Codifica una apuesta a bytes
         """
         payload = b""
+        payload += self._encode_string(str(bet.agency))
         payload += self._encode_string(bet.first_name)
         payload += self._encode_string(bet.last_name)
         payload += self._encode_string(bet.document)

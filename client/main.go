@@ -136,6 +136,7 @@ func main() {
 			log.Errorf("Error leyendo archivo CSV %s: %v", filename, err)
 			// Fallback a modo individual
 			bet := common.Bet{
+				Agency:     agencyID,
 				Nombre:     os.Getenv("NOMBRE"),
 				Apellido:   os.Getenv("APELLIDO"),
 				DNI:        os.Getenv("DOCUMENTO"),
@@ -156,6 +157,7 @@ func main() {
 	} else {
 		// Modo individual: apuesta única
 		bet := common.Bet{
+			Agency:     "1", // Por defecto para modo individual
 			Nombre:     os.Getenv("NOMBRE"),
 			Apellido:   os.Getenv("APELLIDO"),
 			DNI:        os.Getenv("DOCUMENTO"),

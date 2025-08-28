@@ -60,7 +60,11 @@ func (bp *BatchProcessor) ReadBetsFromCSV(filename string) ([]Bet, error) {
 			continue // Saltar registros incompletos
 		}
 
+		// Extraer agency ID del nombre del archivo
+		agencyID := extractAgencyID(filename)
+
 		bet := Bet{
+			Agency:     agencyID,
 			Nombre:     strings.TrimSpace(record[0]),
 			Apellido:   strings.TrimSpace(record[1]),
 			DNI:        strings.TrimSpace(record[2]),
@@ -77,6 +81,21 @@ func (bp *BatchProcessor) ReadBetsFromCSV(filename string) ([]Bet, error) {
 	}
 
 	return bets, nil
+}
+
+// extractAgencyID extrae el ID de la agencia del nombre del archivo
+func extractAgencyID(filename string) string {
+	// El formato es agency-N.csv, extraer el número N
+	parts := strings.Split(filename, "/")
+	if len(parts) > 0 {
+		lastPart := parts[len(parts)-1]
+		if strings.HasPrefix(lastPart, "agency-") && strings.HasSuffix(lastPart, ".csv") {
+			agencyID := strings.TrimPrefix(lastPart, "agency-")
+			agencyID = strings.TrimSuffix(agencyID, ".csv")
+			return agencyID
+		}
+	}
+	return "1" // Por defecto
 }
 
 // ProcessBetsInBatches procesa las apuestas en batches y las envía al servidor

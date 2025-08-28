@@ -26,6 +26,7 @@ const (
 
 // Bet representa una apuesta de quiniela
 type Bet struct {
+	Agency     string
 	Nombre     string
 	Apellido   string
 	DNI        string
@@ -160,6 +161,7 @@ func (p *Protocol) ReceiveMessage(conn net.Conn) (byte, []byte, error) {
 // EncodeBet codifica una apuesta a bytes
 func (p *Protocol) EncodeBet(bet Bet) []byte {
 	payload := make([]byte, 0)
+	payload = append(payload, p.encodeString(bet.Agency)...)
 	payload = append(payload, p.encodeString(bet.Nombre)...)
 	payload = append(payload, p.encodeString(bet.Apellido)...)
 	payload = append(payload, p.encodeString(bet.DNI)...)
@@ -174,6 +176,11 @@ func (p *Protocol) DecodeBet(payload []byte) (Bet, error) {
 	offset := 0
 	
 	// Decodificar campos
+	agency, offset, err := p.decodeString(payload, offset)
+	if err != nil {
+		return bet, fmt.Errorf("error decodificando agency: %v", err)
+	}
+	
 	nombre, offset, err := p.decodeString(payload, offset)
 	if err != nil {
 		return bet, fmt.Errorf("error decodificando nombre: %v", err)
@@ -200,6 +207,7 @@ func (p *Protocol) DecodeBet(payload []byte) (Bet, error) {
 	}
 	
 	bet = Bet{
+		Agency:     agency,
 		Nombre:     nombre,
 		Apellido:   apellido,
 		DNI:        dni,
