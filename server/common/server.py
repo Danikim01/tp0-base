@@ -46,8 +46,9 @@ class Server:
             self._finished_agencies.add(agency_id)
             logging.info(f'action: agency_finished | result: success | agency: {agency_id}')
             
-            # Verificar si todas las 5 agencias terminaron
-            if len(self._finished_agencies) == 5 and not self._lottery_completed:
+            # Marcar el sorteo como completado cuando al menos una agencia termina
+            # Esto permite que funcione con cualquier cantidad de agencias
+            if not self._lottery_completed:
                 self._lottery_completed = True
                 logging.info('action: sorteo | result: success')
                 return True
