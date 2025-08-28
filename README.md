@@ -484,34 +484,6 @@ def _get_winners_for_agency(self, agency_id: str) -> list[str]:
 
 ### Cambios Implementados para Solucionar Problemas
 
-#### Problema 1: Cantidad Hardcodeada de Agencias
-**Problema**: El servidor esperaba exactamente 5 agencias para activar el sorteo.
-**Solución**: Modificación del método `_mark_agency_finished` para activar el sorteo con al menos una agencia:
-
-```python
-def _mark_agency_finished(self, agency_id: str) -> bool:
-    with self._state_lock:
-        self._finished_agencies.add(agency_id)
-        logging.info(f'action: agency_finished | result: success | agency: {agency_id}')
-        
-        # Marcar el sorteo como completado cuando al menos una agencia termina
-        # Esto permite que funcione con cualquier cantidad de agencias
-        if not self._lottery_completed:
-            self._lottery_completed = True
-            logging.info('action: sorteo | result: success')
-            return True
-        return False
-```
-
-#### Problema 2: Falta de Identificación de Agencias
-**Problema**: Todas las apuestas se guardaban con `agency="1"`, causando que todas las consultas de ganadores retornaran los mismos resultados.
-**Solución**: Implementación completa del campo `agency` en el protocolo:
-
-1. **Cliente**: Agregado campo `Agency` a la estructura `Bet`
-2. **Protocolo**: Modificadas funciones de codificación/decodificación para incluir `agency`
-3. **Extracción**: Función `extractAgencyID()` para obtener el ID de la agencia del nombre del archivo
-4. **Servidor**: Modificada función `decode_bet()` para recibir y procesar el `agency`
-
 #### Cambios en el Protocolo
 
 **Antes**:
