@@ -17,6 +17,9 @@ class Protocol:
     MSG_BATCH = 0x02
     MSG_SUCCESS = 0x03
     MSG_ERROR = 0x04
+    MSG_FINISHED = 0x05
+    MSG_WINNERS_QUERY = 0x06
+    MSG_WINNERS_RESPONSE = 0x07
 
     def __init__(self):
         pass
@@ -371,6 +374,73 @@ class Protocol:
             if first_bet:
                 self.send_response(client_sock, False, first_bet.document, str(first_bet.number))
             return False
+    
+    def receive_finished_notification(self, client_sock: socket.socket) -> Optional[str]:
+        """
+        Recibe notificación de finalización de una agencia
+        """
+        result = self.receive_message(client_sock)
+        if not result:
+            return None
+        
+        msg_type, payload = result
+        
+        if msg_type != self.MSG_FINISHED:
+            logging.error(f"action: receive_finished | result: fail | error: unexpected message type {msg_type}")
+            return None
+        
+        try:
+            offset = 0
+            agency_id, _ = self._decode_string(payload, offset)
+            return agency_id
+        except Exception as e:
+            logging.error(f"action: receive_finished | result: fail | error: {e}")
+            return None
+    
+    def send_finished_ack(self, client_sock: socket.socket, success: bool) -> bool:
+        """
+        Envía confirmación de recepción de notificación de finalización
+        """
+        msg_type = self.MSG_SUCCESS if success else self.MSG_ERROR
+        payload = self._encode_string("OK" if success else "ERROR")
+        return self.send_message(client_sock, msg_type, payload)
+    
+    def receive_winners_query(self, client_sock: socket.socket) -> Optional[str]:
+        """
+        Recibe consulta de ganadores de una agencia
+        """
+        result = self.receive_message(client_sock)
+        if not result:
+            return None
+        
+        msg_type, payload = result
+        
+        if msg_type != self.MSG_WINNERS_QUERY:
+            logging.error(f"action: receive_winners_query | result: fail | error: unexpected message type {msg_type}")
+            return None
+        
+        try:
+            offset = 0
+            agency_id, _ = self._decode_string(payload, offset)
+            return agency_id
+        except Exception as e:
+            logging.error(f"action: receive_winners_query | result: fail | error: {e}")
+            return None
+    
+    def send_winners_response(self, client_sock: socket.socket, winners: list[str]) -> bool:
+        """
+        Envía respuesta con la lista de ganadores
+        """
+        payload = b""
+        
+        # Escribir cantidad de ganadores (4 bytes)
+        payload += struct.pack('!I', len(winners))
+        
+        # Escribir cada DNI ganador
+        for winner in winners:
+            payload += self._encode_string(winner)
+        
+        return self.send_message(client_sock, self.MSG_WINNERS_RESPONSE, payload)
     
     def process_bet(self, client_sock: socket.socket) -> bool:
         """

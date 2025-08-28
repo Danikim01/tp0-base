@@ -119,5 +119,13 @@ func (bp *BatchProcessor) ProcessBetsInBatches(conn net.Conn, bets []Bet) error 
 
 // GetAgencyFilename genera el nombre del archivo para una agencia específica
 func GetAgencyFilename(agencyID int) string {
-	return fmt.Sprintf("/data/agency-%d.csv", agencyID)
+	// En Docker Compose, el directorio .data se monta en /data
+	// Verificar si estamos en Docker (existe /data) o en local (.data)
+	if _, err := os.Stat("/data"); err == nil {
+		// Estamos en Docker, usar /data
+		return fmt.Sprintf("/data/agency-%d.csv", agencyID)
+	} else {
+		// Estamos en local, usar .data
+		return fmt.Sprintf(".data/agency-%d.csv", agencyID)
+	}
 }

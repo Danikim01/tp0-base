@@ -19,6 +19,9 @@ const (
 	MSG_BATCH           = 0x02
 	MSG_SUCCESS         = 0x03
 	MSG_ERROR           = 0x04
+	MSG_FINISHED        = 0x05
+	MSG_WINNERS_QUERY   = 0x06
+	MSG_WINNERS_RESPONSE = 0x07
 )
 
 // Bet representa una apuesta de quiniela
@@ -240,6 +243,53 @@ func (p *Protocol) EncodeBatch(bets []Bet) []byte {
 func (p *Protocol) SendBatch(conn net.Conn, bets []Bet) error {
 	payload := p.EncodeBatch(bets)
 	return p.SendMessage(conn, MSG_BATCH, payload)
+}
+
+// SendFinishedNotification envía notificación de finalización al servidor
+func (p *Protocol) SendFinishedNotification(conn net.Conn, agencyID string) error {
+	payload := p.encodeString(agencyID)
+	return p.SendMessage(conn, MSG_FINISHED, payload)
+}
+
+// SendWinnersQuery envía consulta de ganadores al servidor
+func (p *Protocol) SendWinnersQuery(conn net.Conn, agencyID string) error {
+	payload := p.encodeString(agencyID)
+	return p.SendMessage(conn, MSG_WINNERS_QUERY, payload)
+}
+
+// ReceiveWinnersResponse recibe la respuesta con los ganadores del servidor
+func (p *Protocol) ReceiveWinnersResponse(conn net.Conn) (bool, []string, error) {
+	msgType, payload, err := p.ReceiveMessage(conn)
+	if err != nil {
+		return false, nil, fmt.Errorf("error recibiendo respuesta de ganadores: %v", err)
+	}
+	
+	if msgType != MSG_WINNERS_RESPONSE {
+		return false, nil, fmt.Errorf("tipo de mensaje inesperado: %d", msgType)
+	}
+	
+	// Decodificar respuesta de ganadores
+	offset := 0
+	
+	// Leer cantidad de ganadores (4 bytes)
+	if offset+4 > len(payload) {
+		return false, nil, fmt.Errorf("datos insuficientes para decodificar cantidad de ganadores")
+	}
+	cantidad := binary.BigEndian.Uint32(payload[offset : offset+4])
+	offset += 4
+	
+	// Leer cada DNI ganador
+	ganadores := make([]string, 0, cantidad)
+	for i := uint32(0); i < cantidad; i++ {
+		dni, newOffset, err := p.decodeString(payload, offset)
+		if err != nil {
+			return false, nil, fmt.Errorf("error decodificando DNI ganador %d: %v", i+1, err)
+		}
+		ganadores = append(ganadores, dni)
+		offset = newOffset
+	}
+	
+	return true, ganadores, nil
 }
 
 // ReceiveResponse recibe la respuesta del servidor
