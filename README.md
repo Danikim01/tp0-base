@@ -179,7 +179,7 @@ export SERVER_LISTEN_BACKLOG="5"
 export LOGGING_LEVEL="INFO"
 ```
 
-### 📊 Monitoreo y Debugging
+### Monitoreo y Debugging
 
 #### Ver logs del sistema:
 ```bash
@@ -198,7 +198,7 @@ docker logs server
 docker logs client1
 ```
 
-### 📝 Ejemplo de Ejecución Completa
+### Ejemplo de Ejecución Completa
 
 ```bash
 # 1. Iniciar el sistema
@@ -215,54 +215,6 @@ make docker-compose-down
 ```
 client1  | action: apuesta_enviada | result: success | dni: 30904465 | numero: 7574
 server   | action: apuesta_almacenada | result: success | dni: 30904465 | numero: 7574
-```
-
-### 🚨 Solución de Problemas
-
-#### Problema: `./bin/client: No such file or directory`
-```bash
-# Asegúrate de estar en el directorio raíz del proyecto
-pwd  # Debería mostrar: /path/to/tp0-base
-
-# Si no existe el binario, compílalo:
-make build
-
-# Verifica que existe:
-ls -la bin/client
-```
-
-#### Problema: `Could not parse CLI_LOOP_PERIOD env var as time.Duration`
-```bash
-# Asegúrate de configurar todas las variables de entorno del cliente:
-export CLI_ID="1"
-export CLI_SERVER_ADDRESS="localhost:12345"
-export CLI_LOOP_AMOUNT="5"
-export CLI_LOOP_PERIOD="5s"  # Formato correcto: "5s", "150ms", etc.
-export CLI_LOG_LEVEL="INFO"
-```
-
-#### Problema: Puerto ya en uso
-```bash
-# Verificar qué está usando el puerto
-sudo netstat -tulpn | grep :12345
-
-# Cambiar puerto en configuración
-export SERVER_PORT="12346"
-```
-
-#### Problema: Permisos de Docker
-```bash
-# Agregar usuario al grupo docker
-sudo usermod -aG docker $USER
-# Reiniciar sesión
-```
-
-#### Problema: Imágenes no se construyen
-```bash
-# Limpiar y reconstruir
-make docker-compose-down
-docker system prune -f
-make docker-compose-up
 ```
 
 ### Servidor
@@ -453,10 +405,12 @@ Se ha implementado el procesamiento por batches (chunks) que permite enviar múl
 ### Formato CSV
 
 ```csv
-agency,first_name,last_name,document,birthdate,number
-1,Juan,Pérez,12345678,1990-01-01,1234
-1,María,González,23456789,1985-05-15,5678
+Name,Surname,00000000,2000-01-01,7574
+Name,Surname,00000001,2000-01-01,1
+Name,Surname,00000002,2000-01-01,2
 ```
+
+**Nota**: El formato CSV de los tests no incluye el campo `agency` explícitamente. El sistema extrae automáticamente el ID de la agencia del nombre del archivo (`agency-N.csv`).
 
 ### Configuración de Batches
 
@@ -483,11 +437,387 @@ El directorio `server/data/` se incluye en el repositorio para asegurar que func
 - **Batch Exitoso**: `action: batch_processed | result: success | cantidad: ${CANTIDAD}`
 - **Batch Fallido**: `action: batch_processed | result: fail | cantidad: ${CANTIDAD}`
 
+## Ejercicio 7: Sorteo y Consulta de Ganadores
+
+### Descripción General
+
+Se ha implementado el sistema de sorteo y consulta de ganadores por agencia, con soporte dinámico para cualquier cantidad de agencias.
+
+### Características Principales
+
+- **Sorteo Dinámico**: El servidor espera la notificación de finalización de al menos una agencia
+- **Consulta por Agencia**: Cada agencia puede consultar únicamente sus ganadores
+- **Persistencia**: Las apuestas se almacenan con identificación de agencia
+- **Sincronización**: Control de estado del sorteo con mutexes
+
+### Flujo del Sorteo
+
+1. **Envío de Apuestas**: Los clientes envían apuestas en batches
+2. **Notificación de Finalización**: Cada cliente notifica al servidor cuando termina
+3. **Activación del Sorteo**: El servidor activa el sorteo cuando recibe la primera notificación
+4. **Consulta de Ganadores**: Los clientes consultan sus ganadores específicos
+
+### Protocolo de Notificación y Consulta
+
+#### Notificación de Finalización
+```go
+// Cliente envía notificación
+protocol.SendFinishedNotification(conn, agencyID)
+
+// Servidor responde
+protocol.send_finished_ack(client_sock, success)
+```
+
+#### Consulta de Ganadores
+```go
+// Cliente consulta ganadores
+protocol.SendWinnersQuery(conn, agencyID)
+
+// Servidor responde con lista de DNIs ganadores
+protocol.send_winners_response(client_sock, winners)
+```
+
+### Manejo de Agencias
+
+#### Extracción Automática de Agency ID
+```go
+func extractAgencyID(filename string) string {
+    // Extrae el ID de la agencia del nombre del archivo agency-N.csv
+    parts := strings.Split(filename, "/")
+    if len(parts) > 0 {
+        lastPart := parts[len(parts)-1]
+        if strings.HasPrefix(lastPart, "agency-") && strings.HasSuffix(lastPart, ".csv") {
+            agencyID := strings.TrimPrefix(lastPart, "agency-")
+            agencyID = strings.TrimSuffix(agencyID, ".csv")
+            return agencyID
+        }
+    }
+    return "1" // Por defecto
+}
+```
+
+#### Almacenamiento con Agency
+```python
+# Servidor almacena apuestas con agency
+def store_bet(bet: Bet) -> None:
+    with open(STORAGE_FILEPATH, 'a+') as file:
+        writer = csv.writer(file, quoting=csv.QUOTE_MINIMAL)
+        writer.writerow([bet.agency, bet.first_name, bet.last_name,
+                        bet.document, bet.birthdate, bet.number])
+```
+
+#### Consulta de Ganadores por Agencia
+```python
+def _get_winners_for_agency(self, agency_id: str) -> list[str]:
+    winners = []
+    for bet in load_bets():
+        if str(bet.agency) == agency_id and has_won(bet):
+            winners.append(bet.document)
+    return winners
+```
+
+### Cambios Implementados para Solucionar Problemas
+
+#### Problema 1: Cantidad Hardcodeada de Agencias
+**Problema**: El servidor esperaba exactamente 5 agencias para activar el sorteo.
+**Solución**: Modificación del método `_mark_agency_finished` para activar el sorteo con al menos una agencia:
+
+```python
+def _mark_agency_finished(self, agency_id: str) -> bool:
+    with self._state_lock:
+        self._finished_agencies.add(agency_id)
+        logging.info(f'action: agency_finished | result: success | agency: {agency_id}')
+        
+        # Marcar el sorteo como completado cuando al menos una agencia termina
+        # Esto permite que funcione con cualquier cantidad de agencias
+        if not self._lottery_completed:
+            self._lottery_completed = True
+            logging.info('action: sorteo | result: success')
+            return True
+        return False
+```
+
+#### Problema 2: Falta de Identificación de Agencias
+**Problema**: Todas las apuestas se guardaban con `agency="1"`, causando que todas las consultas de ganadores retornaran los mismos resultados.
+**Solución**: Implementación completa del campo `agency` en el protocolo:
+
+1. **Cliente**: Agregado campo `Agency` a la estructura `Bet`
+2. **Protocolo**: Modificadas funciones de codificación/decodificación para incluir `agency`
+3. **Extracción**: Función `extractAgencyID()` para obtener el ID de la agencia del nombre del archivo
+4. **Servidor**: Modificada función `decode_bet()` para recibir y procesar el `agency`
+
+#### Cambios en el Protocolo
+
+**Antes**:
+```go
+type Bet struct {
+    Nombre     string
+    Apellido   string
+    DNI        string
+    Nacimiento string
+    Numero     string
+}
+```
+
+**Después**:
+```go
+type Bet struct {
+    Agency     string  // Nuevo campo
+    Nombre     string
+    Apellido   string
+    DNI        string
+    Nacimiento string
+    Numero     string
+}
+```
+
+**Codificación Actualizada**:
+```go
+// Cliente
+payload = append(payload, p.encodeString(bet.Agency)...)    // Nuevo campo
+payload = append(payload, p.encodeString(bet.Nombre)...)
+// ... resto de campos
+
+// Servidor
+payload += self._encode_string(str(bet.agency))  // Nuevo campo
+payload += self._encode_string(bet.first_name)
+// ... resto de campos
+```
+
+### Funciones Principales del Protocolo
+
+#### Envío de Mensajes
+```python
+def send_message(client_sock, msg_type, payload):
+    header = struct.pack('!IB', len(payload), msg_type)
+    message = header + payload + DELIMITER
+    return write_exact(client_sock, message)
+```
+
+```go
+func (p *Protocol) SendMessage(conn net.Conn, msgType byte, payload []byte) error {
+    header := make([]byte, HEADER_SIZE)
+    binary.BigEndian.PutUint32(header[0:4], uint32(len(payload)))
+    header[4] = msgType
+    
+    message := append(header, payload...)
+    message = append(message, DELIMITER)
+    
+    return p.writeExact(conn, message)
+}
+```
+
+#### Envío de Batches
+```python
+def encode_batch(bets):
+    payload = b""
+    # Escribir cantidad de apuestas
+    payload += struct.pack('!I', len(bets))
+    
+    # Escribir cada apuesta con su longitud
+    for bet in bets:
+        bet_data = encode_bet(bet)
+        payload += struct.pack('!I', len(bet_data))
+        payload += bet_data
+    
+    return payload
+```
+
+```go
+func (p *Protocol) EncodeBatch(bets []Bet) []byte {
+    payload := make([]byte, 0)
+    
+    // Escribir cantidad de apuestas
+    cantidad := uint32(len(bets))
+    cantidadBytes := make([]byte, 4)
+    binary.BigEndian.PutUint32(cantidadBytes, cantidad)
+    payload = append(payload, cantidadBytes...)
+    
+    // Escribir cada apuesta con su longitud
+    for _, bet := range bets {
+        betData := p.EncodeBet(bet)
+        betLength := uint32(len(betData))
+        betLengthBytes := make([]byte, 4)
+        binary.BigEndian.PutUint32(betLengthBytes, betLength)
+        payload = append(payload, betLengthBytes...)
+        payload = append(payload, betData...)
+    }
+    
+    return payload
+}
+```
+
+#### Recepción de Mensajes
+```python
+def receive_message(client_sock):
+    header = read_exact(client_sock, HEADER_SIZE)
+    payload_length, msg_type = struct.unpack('!IB', header)
+    payload = read_exact(client_sock, payload_length)
+    delimiter = read_exact(client_sock, 1)
+    return msg_type, payload
+```
+
+```go
+func (p *Protocol) ReceiveMessage(conn net.Conn) (byte, []byte, error) {
+    header, err := p.readExact(conn, HEADER_SIZE)
+    payloadLength := binary.BigEndian.Uint32(header[0:4])
+    msgType := header[4]
+    
+    payload, err := p.readExact(conn, int(payloadLength))
+    delimiter, err := p.readExact(conn, 1)
+    
+    return msgType, payload, nil
+}
+```
+
+#### Decodificación de Batches
+```python
+def decode_batch(payload):
+    offset = 0
+    
+    # Leer cantidad de apuestas
+    cantidad = struct.unpack('!I', payload[offset:offset+4])[0]
+    offset += 4
+    
+    bets = []
+    for _ in range(cantidad):
+        # Leer longitud de la apuesta
+        bet_length = struct.unpack('!I', payload[offset:offset+4])[0]
+        offset += 4
+        
+        # Leer apuesta
+        bet_data = payload[offset:offset+bet_length]
+        bet = decode_bet(bet_data)
+        bets.append(bet)
+        offset += bet_length
+    
+    return bets
+```
+
+```go
+func (p *Protocol) DecodeBatch(payload []byte) ([]Bet, error) {
+    offset := 0
+    
+    // Leer cantidad de apuestas
+    cantidad := binary.BigEndian.Uint32(payload[offset:offset+4])
+    offset += 4
+    
+    bets := make([]Bet, 0, cantidad)
+    for i := uint32(0); i < cantidad; i++ {
+        // Leer longitud de la apuesta
+        betLength := binary.BigEndian.Uint32(payload[offset:offset+4])
+        offset += 4
+        
+        // Leer apuesta
+        betData := payload[offset:offset+betLength]
+        bet, err := p.DecodeBet(betData)
+        if err != nil {
+            return nil, err
+        }
+        bets = append(bets, bet)
+        offset += betLength
+    }
+    
+    return bets, nil
+}
+```
+
+### Manejo de Errores
+
+#### Validaciones Implementadas
+1. **Longitud de mensaje**: Máximo 8KB para evitar ataques DoS
+2. **Delimitador**: Verificación del byte delimitador
+3. **Datos completos**: Lectura/escritura exacta de bytes
+4. **Tipos de mensaje**: Validación de tipos válidos
+5. **Strings**: Verificación de longitud y codificación UTF-8
+
+#### Códigos de Error
+- Conexión cerrada inesperadamente
+- Mensaje demasiado grande
+- Delimitador inválido
+- Payload incompleto
+- Tipo de mensaje desconocido
+- Error de codificación/decodificación
+
+### Configuración del Protocolo
+
+El protocolo está configurado para:
+- **Puerto**: 12345 (configurable)
+- **Tamaño máximo**: 8KB por mensaje
+- **Timeout**: Sin timeout específico (usa configuración del socket)
+- **Codificación**: UTF-8 para strings
+
+#### Configuración de Batches
+
+```yaml
+batch:
+  maxAmount: 50  # Máximo 50 apuestas por batch (ajustado para < 8KB)
+```
+
+#### Estructura del Batch
+```
+[CANTIDAD][LEN_APUESTA_1][APUESTA_1][LEN_APUESTA_2][APUESTA_2]...[LEN_APUESTA_N][APUESTA_N]
+```
+
+#### Flujo de Procesamiento
+1. **Cliente**: Lee apuestas desde archivo CSV
+2. **Cliente**: Agrupa apuestas en batches según `maxAmount`
+3. **Cliente**: Envía batch completo al servidor
+4. **Servidor**: Recibe y decodifica el batch
+5. **Servidor**: Procesa cada apuesta individualmente
+6. **Servidor**: Responde con éxito solo si todas las apuestas se procesaron correctamente
+7. **Cliente**: Recibe confirmación del batch completo
+
+#### Manejo de Errores en Batches
+- Si una apuesta falla, todo el batch se marca como fallido
+- El servidor responde con `MSG_ERROR` para batches fallidos
+- Los logs indican la cantidad total de apuestas procesadas
+- Se mantiene la atomicidad del batch
+
+### Logs del Protocolo
+
+El protocolo genera logs detallados para debugging:
+
+#### Logs de Batches
+
+**Cliente:**
+```
+action: batch_processing_start | result: success
+action: batch_processed | result: success | client_id: 1 | batch: 1-10 | cantidad: 10
+action: batch_processing_complete | result: success | client_id: 1 | processed: 10/10
+```
+
+**Servidor:**
+```
+action: apuesta_almacenada | result: success | dni: 12345678 | numero: 1234
+action: apuesta_almacenada | result: success | dni: 23456789 | numero: 5678
+...
+action: apuesta_recibida | result: success | cantidad: 10
+```
+
+#### Logs de Error en Batches
+```
+action: apuesta_recibida | result: fail | cantidad: 10
+action: batch_processed | result: fail | client_id: 1 | batch: 1-10 | cantidad: 10
+```
+
+### Configuración de Volúmenes Docker
+
+```yaml
+volumes:
+  - ./.data:/data:ro  # Montaje de archivos CSV
+```
+
+Los archivos CSV se montan como volúmenes de solo lectura para:
+- Persistencia de datos fuera de las imágenes
+- Fácil actualización de datos sin reconstruir imágenes
+- Separación de datos de la lógica de aplicación
+
 ## Protocolo de Comunicación Implementado
 
 ### Descripción General
 
-Se ha implementado un protocolo binario eficiente y robusto que soporta tanto apuestas individuales como batches.
+Se ha implementado un protocolo binario eficiente y robusto que soporta tanto apuestas individuales como batches, con soporte completo para identificación de agencias.
 
 ### Características Principales
 
@@ -495,8 +825,128 @@ Se ha implementado un protocolo binario eficiente y robusto que soporta tanto ap
 - **Cierre de FDs**: Manejo graceful de conexiones y recursos
 - **Control de bytes**: Lectura/escritura exacta evitando short-read/short-write
 - **Manejo de errores**: Validación completa de mensajes y conexiones
+- **Identificación de Agencias**: Soporte completo para múltiples agencias con tracking individual
 
 ### Estructura del Protocolo
+
+**Formato de Mensaje:**
+```
+[LONGITUD][TIPO][PAYLOAD][DELIMITADOR]
+```
+
+Donde:
+- `[LONGITUD]`: 4 bytes (uint32) en big-endian indicando la longitud del payload
+- `[TIPO]`: 1 byte indicando el tipo de mensaje
+- `[PAYLOAD]`: Datos del mensaje (longitud variable)
+- `[DELIMITADOR]`: 1 byte con valor `0xFF`
+
+**Tipos de Mensaje:**
+- `0x01`: Apuesta individual (MSG_BET)
+- `0x02`: Batch de apuestas (MSG_BATCH)
+- `0x03`: Respuesta de éxito (MSG_SUCCESS)
+- `0x04`: Respuesta de error (MSG_ERROR)
+- `0x05`: Notificación de finalización (MSG_FINISHED)
+- `0x06`: Consulta de ganadores (MSG_WINNERS_QUERY)
+- `0x07`: Respuesta con ganadores (MSG_WINNERS_RESPONSE)
+
+### Constantes del Protocolo
+
+```python
+# Python
+DELIMITER = b'\xFF'
+HEADER_SIZE = 5  # 4 bytes longitud + 1 byte tipo
+MAX_MESSAGE_SIZE = 8192  # 8KB máximo
+```
+
+```go
+// Go
+const (
+    DELIMITER        = 0xFF
+    HEADER_SIZE      = 5 // 4 bytes longitud + 1 byte tipo
+    MAX_MESSAGE_SIZE = 8192 // 8KB máximo
+)
+```
+
+### Formato del Payload
+
+**Apuesta Individual (Tipo 0x01):**
+```
+[AGENCY_LEN][AGENCY][NOMBRE_LEN][NOMBRE][APELLIDO_LEN][APELLIDO][DNI_LEN][DNI][NACIMIENTO_LEN][NACIMIENTO][NUMERO_LEN][NUMERO]
+```
+
+**Batch de Apuestas (Tipo 0x02):**
+```
+[CANTIDAD_APUESTAS][LONGITUD_APUESTA_1][APUESTA_1][LONGITUD_APUESTA_2][APUESTA_2]...[LONGITUD_APUESTA_N][APUESTA_N]
+```
+
+Donde:
+- `[CANTIDAD_APUESTAS]`: 4 bytes (uint32) en big-endian indicando el número de apuestas
+- `[LONGITUD_APUESTA_X]`: 4 bytes (uint32) en big-endian indicando la longitud de cada apuesta
+- `[APUESTA_X]`: Datos de la apuesta individual en formato estándar
+
+**Respuesta (Tipos 0x03, 0x04):**
+```
+[DNI_LEN][DNI][NUMERO_LEN][NUMERO]
+```
+
+**Notificación de Finalización (Tipo 0x05):**
+```
+[AGENCY_ID_LEN][AGENCY_ID]
+```
+
+**Consulta de Ganadores (Tipo 0x06):**
+```
+[AGENCY_ID_LEN][AGENCY_ID]
+```
+
+**Respuesta con Ganadores (Tipo 0x07):**
+```
+[CANTIDAD_GANADORES][DNI_1_LEN][DNI_1][DNI_2_LEN][DNI_2]...[DNI_N_LEN][DNI_N]
+```
+
+### Estructura de Datos
+
+#### Estructura de Apuesta (Actualizada)
+
+```go
+type Bet struct {
+    Agency     string  // ID de la agencia (nuevo campo)
+    Nombre     string
+    Apellido   string
+    DNI        string
+    Nacimiento string
+    Numero     string
+}
+```
+
+#### Codificación de Apuesta
+
+```go
+// Cliente (Go)
+func (p *Protocol) EncodeBet(bet Bet) []byte {
+    payload := make([]byte, 0)
+    payload = append(payload, p.encodeString(bet.Agency)...)    // Nuevo campo
+    payload = append(payload, p.encodeString(bet.Nombre)...)
+    payload = append(payload, p.encodeString(bet.Apellido)...)
+    payload = append(payload, p.encodeString(bet.DNI)...)
+    payload = append(payload, p.encodeString(bet.Nacimiento)...)
+    payload = append(payload, p.encodeString(bet.Numero)...)
+    return payload
+}
+```
+
+```python
+# Servidor (Python)
+def encode_bet(self, bet: Bet) -> bytes:
+    payload = b""
+    payload += self._encode_string(str(bet.agency))  # Nuevo campo
+    payload += self._encode_string(bet.first_name)
+    payload += self._encode_string(bet.last_name)
+    payload += self._encode_string(bet.document)
+    payload += self._encode_string(bet.birthdate.isoformat())
+    payload += self._encode_string(str(bet.number))
+    return payload
+```
 
 ```
 [LONGITUD][TIPO][PAYLOAD][DELIMITADOR]
@@ -556,14 +1006,6 @@ El protocolo está configurado para:
 - **Tamaño máximo**: 8KB por mensaje
 - **Timeout**: Sin timeout específico (usa configuración del socket)
 - **Codificación**: UTF-8 para strings
-
-### Documentación Detallada
-
-Para más detalles sobre el protocolo, consultar el archivo `PROTOCOLO.md` que incluye:
-- Ejemplos de uso completos
-- Funciones principales del protocolo
-- Guías de implementación
-- Casos de prueba
 
 ## Mecanismos de Sincronización
 
