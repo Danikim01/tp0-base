@@ -232,9 +232,9 @@ func (c *Client) StartClientLoop(bet Bet) {
 	}
 	
 	if success {
-		log.Infof("client%v | action: consulta_ganadores | result: success | cant_ganadores: %d", c.config.ID, len(ganadores))
+		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(ganadores))
 	} else {
-		log.Errorf("client%v | action: consulta_ganadores | result: fail", c.config.ID)
+		log.Errorf("action: consulta_ganadores | result: fail")
 	}
 }
 
@@ -353,8 +353,8 @@ func (c *Client) StartBatchProcessing(bets []Bet, maxBatchSize int) {
 	}
 	
 	if success {
-		log.Infof("client%v | action: consulta_ganadores | result: success | cant_ganadores: %d", c.config.ID, len(ganadores))
+		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(ganadores))
 	} else {
-		log.Errorf("client%v | action: consulta_ganadores | result: fail", c.config.ID)
+		log.Errorf("action: consulta_ganadores | result: fail")
 	}
 }
