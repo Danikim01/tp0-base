@@ -16,6 +16,7 @@ test-graceful-shutdown.sh
 server/data/bets.csv
 run-local.sh
 test-quiniela.sh
+test_concurrent_clients.sh
 
 #Ignore agency-*.csv
 .data/agency-*.csv
