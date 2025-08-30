@@ -19,10 +19,11 @@ print_success() {
     echo -e "${GREEN}action: test_echo_server | result: success${NC}"
 }
 
-# Verificar que docker-compose esté ejecutándose
+# Verificar que algún servidor esté ejecutándose
 echo "Verificando que el servidor esté ejecutándose..."
 
-if ! docker compose -f docker-compose-dev.yaml ps | grep -q "server.*Up"; then
+# Buscar cualquier contenedor llamado "server" que esté ejecutándose
+if ! docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q "^server.*Up"; then
     print_error "El servidor no está ejecutándose. Ejecuta 'docker-compose up -d' primero."
     exit 1
 fi
