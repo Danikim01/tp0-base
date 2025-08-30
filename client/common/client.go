@@ -117,7 +117,7 @@ func (c *Client) StartClientLoop() {
 		// Check if shutdown was requested
 		select {
 		case <-c.ctx.Done():
-			log.Info("action: client_loop | result: interrupted")
+			log.Info("action: client_loop | result: success")
 			return
 		default:
 			// Continue with normal operation
@@ -162,7 +162,7 @@ func (c *Client) StartClientLoop() {
 		case <-time.After(c.config.LoopPeriod):
 			// Sleep completed normally
 		case <-c.ctx.Done():
-			log.Info("action: client_loop | result: interrupted")
+			log.Info("action: client_loop | result: success")
 			return
 		}
 	}
