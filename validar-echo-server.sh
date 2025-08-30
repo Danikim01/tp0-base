@@ -39,15 +39,15 @@ echo "Enviando mensaje de prueba: '$TEST_MESSAGE'"
 
 # Ejecutar netcat dentro de un contenedor temporal conectado a la misma red
 # Redirigir stderr a /dev/null para evitar mensajes de instalación
-RESULT=$(docker run --rm \
+RESULT=$(timeout 100 docker run --rm \
     --network tp0_testing_net \
     alpine:latest \
     sh -c "
         # Instalar netcat (redirigir salida a /dev/null)
         apk add --no-cache netcat-openbsd > /dev/null 2>&1
         
-        # Enviar mensaje y capturar respuesta
-        echo '$TEST_MESSAGE' | nc server 12345
+        # Enviar mensaje y capturar respuesta con timeout
+        echo '$TEST_MESSAGE' | timeout 100 nc server 12345
     " 2>/dev/null)
 
 # Verificar el resultado
