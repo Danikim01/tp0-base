@@ -43,11 +43,8 @@ RESULT=$(docker run --rm \
     --network tp0_testing_net \
     alpine:latest \
     sh -c "
-        # Instalar netcat (redirigir salida a /dev/null)
-        apk add --no-cache netcat-openbsd > /dev/null 2>&1
-        
-        # Enviar mensaje y capturar respuesta con timeout
-        echo '$TEST_MESSAGE' | nc server 12345
+        apk add --no-cache netcat-openbsd coreutils > /dev/null 2>&1
+        echo \"$TEST_MESSAGE\" | nc -q 1 server 12345
     " 2>/dev/null)
 
 # Verificar el resultado
