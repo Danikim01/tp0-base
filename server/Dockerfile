@@ -3,4 +3,4 @@ COPY server /
 # El archivo config.ini será montado como volumen desde el host
 # COPY server/config.ini /config.ini
 RUN python -m unittest tests/test_common.py
-ENTRYPOINT ["/bin/sh"]
+ENTRYPOINT ["python3", "/main.py"]
