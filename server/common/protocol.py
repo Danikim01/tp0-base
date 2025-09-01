@@ -2,7 +2,7 @@ import logging
 import socket
 import struct
 from typing import Optional, Tuple, List
-from .utils import Bet, store_bet
+from .utils import Bet, store_bets
 
 class Protocol:
     """Protocolo de comunicación propio sin JSON"""
@@ -201,7 +201,7 @@ class Protocol:
         
         try:
             # Almacenar apuesta
-            store_bet(bet)
+            store_bets([bet])
             
             # Log de confirmación
             logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")

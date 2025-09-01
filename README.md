@@ -4,7 +4,7 @@ En el presente repositorio se provee un esqueleto básico de cliente/servidor, e
 
 El cliente (Golang) y el servidor (Python) fueron desarrollados en diferentes lenguajes simplemente para mostrar cómo dos lenguajes de programación pueden convivir en el mismo proyecto con la ayuda de containers, en este caso utilizando [Docker Compose](https://docs.docker.com/compose/).
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Ejecución Rápida con Docker (Recomendado)
 
@@ -60,7 +60,7 @@ Los targets disponibles son:
 | `docker-image`  | Construye las imágenes a ser utilizadas tanto en el servidor como en el cliente. Este target es utilizado por **docker-compose-up**, por lo cual se lo puede utilizar para probar nuevos cambios en las imágenes antes de arrancar el proyecto. |
 | `build` | Compila la aplicación cliente para ejecución en el _host_ en lugar de en Docker. De este modo la compilación es mucho más veloz, pero requiere contar con todo el entorno de Golang y Python instalados en la máquina _host_. |
 
-#### 🐳 Pasos para ejecutar con Docker:
+#### Pasos para ejecutar con Docker:
 
 1. **Iniciar el sistema completo:**
    ```bash
@@ -77,7 +77,7 @@ Los targets disponibles son:
    make docker-compose-down
    ```
 
-### 💻 Ejecución Local (Desarrollo)
+### Ejecución Local (Desarrollo)
 
 Si prefieres ejecutar el sistema localmente sin Docker, sigue estos pasos:
 
@@ -153,7 +153,7 @@ Si prefieres ejecutar el sistema localmente sin Docker, sigue estos pasos:
   - `CLI_LOG_LEVEL`: Nivel de logging
 - **Importante**: Para ejecución local, usar `localhost:12345`. Para Docker, usar `server:12345`
 
-### 🔧 Configuración de Variables de Entorno
+### Configuración de Variables de Entorno
 
 #### Para el Cliente (Agencia de Quiniela):
 ```bash
@@ -179,7 +179,7 @@ export SERVER_LISTEN_BACKLOG="5"
 export LOGGING_LEVEL="INFO"
 ```
 
-### 📊 Monitoreo y Debugging
+### Monitoreo y Debugging
 
 #### Ver logs del sistema:
 ```bash
@@ -198,7 +198,7 @@ docker logs server
 docker logs client1
 ```
 
-### 📝 Ejemplo de Ejecución Completa
+### Ejemplo de Ejecución Completa
 
 ```bash
 # 1. Iniciar el sistema
@@ -461,13 +461,172 @@ El protocolo está configurado para:
 - **Timeout**: Sin timeout específico (usa configuración del socket)
 - **Codificación**: UTF-8 para strings
 
-### Documentación Detallada
+## Estructura del Protocolo
 
-Para más detalles sobre el protocolo, consultar el archivo `PROTOCOLO.md` que incluye:
-- Ejemplos de uso completos
-- Funciones principales del protocolo
-- Guías de implementación
-- Casos de prueba
+**Formato de Mensaje:**
+```
+[LONGITUD][TIPO][PAYLOAD][DELIMITADOR]
+```
+
+Donde:
+- `[LONGITUD]`: 4 bytes (uint32) en big-endian indicando la longitud del payload
+- `[TIPO]`: 1 byte indicando el tipo de mensaje
+- `[PAYLOAD]`: Datos del mensaje (longitud variable)
+- `[DELIMITADOR]`: 1 byte con valor `0xFF`
+
+**Tipos de Mensaje:**
+- `0x01`: Apuesta individual
+- `0x03`: Respuesta de éxito
+- `0x04`: Respuesta de error
+
+## Formato del Payload
+
+**Apuesta Individual (Tipo 0x01):**
+```
+[NOMBRE_LEN][NOMBRE][APELLIDO_LEN][APELLIDO][DNI_LEN][DNI][NACIMIENTO_LEN][NACIMIENTO][NUMERO_LEN][NUMERO]
+```
+
+**Respuesta (Tipos 0x03, 0x04):**
+```
+[DNI_LEN][DNI][NUMERO_LEN][NUMERO]
+```
+
+## Implementación detallada del Protocolo
+
+### Constantes del Protocolo
+
+```python
+# Python
+DELIMITER = b'\xFF'
+HEADER_SIZE = 5  # 4 bytes longitud + 1 byte tipo
+MAX_MESSAGE_SIZE = 8192  # 8KB máximo
+```
+
+```go
+// Go
+const (
+    DELIMITER        = 0xFF
+    HEADER_SIZE      = 5 // 4 bytes longitud + 1 byte tipo
+    MAX_MESSAGE_SIZE = 8192 // 8KB máximo
+)
+```
+
+### Funciones Principales
+
+#### Envío de Mensajes
+```python
+def send_message(client_sock, msg_type, payload):
+    header = struct.pack('!IB', len(payload), msg_type)
+    message = header + payload + DELIMITER
+    return write_exact(client_sock, message)
+```
+
+```go
+func (p *Protocol) SendMessage(conn net.Conn, msgType byte, payload []byte) error {
+    header := make([]byte, HEADER_SIZE)
+    binary.BigEndian.PutUint32(header[0:4], uint32(len(payload)))
+    header[4] = msgType
+    
+    message := append(header, payload...)
+    message = append(message, DELIMITER)
+    
+    return p.writeExact(conn, message)
+}
+```
+
+#### Recepción de Mensajes
+```python
+def receive_message(client_sock):
+    header = read_exact(client_sock, HEADER_SIZE)
+    payload_length, msg_type = struct.unpack('!IB', header)
+    payload = read_exact(client_sock, payload_length)
+    delimiter = read_exact(client_sock, 1)
+    return msg_type, payload
+```
+
+```go
+func (p *Protocol) ReceiveMessage(conn net.Conn) (byte, []byte, error) {
+    header, err := p.readExact(conn, HEADER_SIZE)
+    payloadLength := binary.BigEndian.Uint32(header[0:4])
+    msgType := header[4]
+    
+    payload, err := p.readExact(conn, int(payloadLength))
+    delimiter, err := p.readExact(conn, 1)
+    
+    return msgType, payload, nil
+}
+```
+
+## Manejo de Errores
+
+### Validaciones Implementadas
+1. **Longitud de mensaje**: Máximo 8KB para evitar ataques DoS
+2. **Delimitador**: Verificación del byte delimitador
+3. **Datos completos**: Lectura/escritura exacta de bytes
+4. **Tipos de mensaje**: Validación de tipos válidos
+5. **Strings**: Verificación de longitud y codificación UTF-8
+
+### Códigos de Error
+- Conexión cerrada inesperadamente
+- Mensaje demasiado grande
+- Delimitador inválido
+- Payload incompleto
+- Tipo de mensaje desconocido
+- Error de codificación/decodificación
+
+## Ejemplo de Uso
+
+### Cliente (Go)
+```go
+protocol := NewProtocol()
+bet := Bet{Nombre: "Juan", Apellido: "Pérez", DNI: "12345678", ...}
+
+// Enviar apuesta
+err := protocol.SendBet(conn, bet)
+
+// Recibir respuesta
+success, dni, numero, err := protocol.ReceiveResponse(conn)
+```
+
+### Servidor (Python)
+```python
+protocol = Protocol()
+
+# Recibir apuesta
+bet = protocol.receive_bet(client_sock)
+
+# Procesar y almacenar
+store_bet(bet)
+
+# Enviar respuesta
+protocol.send_response(client_sock, True, bet.document, str(bet.number))
+```
+
+## Configuración
+
+El protocolo está configurado para:
+- **Puerto**: 12345 (configurable)
+- **Tamaño máximo**: 8KB por mensaje
+- **Timeout**: Sin timeout específico (usa configuración del socket)
+- **Codificación**: UTF-8 para strings
+
+## Logs del Protocolo
+
+El protocolo genera logs detallados para debugging:
+- Recepción/envío de mensajes
+- Errores de validación
+- Problemas de conexión
+- Confirmaciones de operaciones
+
+## Extensibilidad
+
+El protocolo está diseñado para ser fácilmente extensible:
+1. Agregar nuevos tipos de mensaje
+2. Modificar formatos de payload
+3. Implementar compresión
+4. Agregar encriptación
+5. Soporte para diferentes versiones
+
 
 ## Mecanismos de Sincronización
 

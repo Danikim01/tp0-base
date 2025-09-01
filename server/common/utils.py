@@ -4,12 +4,7 @@ import time
 
 
 """ Bets storage location. """
-import os
-
-# Obtener el directorio del script actual
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Construir path absoluto al archivo de datos
-STORAGE_FILEPATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "data", "bets.csv"))
+STORAGE_FILEPATH = "./bets.csv"
 """ Simulated winner number in the lottery contest. """
 LOTTERY_WINNER_NUMBER = 7574
 
@@ -45,16 +40,6 @@ def store_bets(bets: list[Bet]) -> None:
                              bet.document, bet.birthdate, bet.number])
 
 """
-Persist the information of a single bet in the STORAGE_FILEPATH file.
-Not thread-safe/process-safe.
-"""
-def store_bet(bet: Bet) -> None:
-    with open(STORAGE_FILEPATH, 'a+') as file:
-        writer = csv.writer(file, quoting=csv.QUOTE_MINIMAL)
-        writer.writerow([bet.agency, bet.first_name, bet.last_name,
-                         bet.document, bet.birthdate, bet.number])
-
-"""
 Loads the information all the bets in the STORAGE_FILEPATH file.
 Not thread-safe/process-safe.
 """
@@ -63,4 +48,3 @@ def load_bets() -> list[Bet]:
         reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
         for row in reader:
             yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
-
