@@ -1,3 +1,0 @@
-# Este archivo asegura que el directorio server/data/ se mantenga en el repositorio
-# El archivo bets.csv está en .gitignore y no se incluirá en el repositorio
-# Cuando alguien clone el repo, este directorio se creará automáticamente

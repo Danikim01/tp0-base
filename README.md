@@ -290,7 +290,7 @@ Los campos deben enviarse al servidor para dejar registro de la apuesta. Al reci
 
 
 #### Servidor
-Emulará a la _central de Lotería Nacional_. Deberá recibir los campos de la cada apuesta desde los clientes y almacenar la información mediante la función `store_bet(...)` para control futuro de ganadores. La función `store_bet(...)` es provista por la cátedra y no podrá ser modificada por el alumno.
+Emulará a la _central de Lotería Nacional_. Deberá recibir los campos de la cada apuesta desde los clientes y almacenar la información mediante la función `store_bets(...)` para control futuro de ganadores.
 Al persistir se debe imprimir por log: `action: apuesta_almacenada | result: success | dni: ${DNI} | numero: ${NUMERO}`.
 
 #### Comunicación:
@@ -386,11 +386,18 @@ batch:
 
 ### Almacenamiento de Apuestas
 
-Las apuestas procesadas se almacenan en:
-- **Local**: `./server/data/bets.csv`
-- **Docker**: `/server_data/bets.csv` (dentro del contenedor)
+Las apuestas procesadas se almacenan usando la función `store_bets(bets: list[Bet])` que:
+- **Funcionalidad**: Almacena múltiples apuestas en una sola operación
+- **Formato**: CSV con campos: agency, first_name, last_name, document, birthdate, number
+- **Ubicación Local**: `./server/data/bets.csv`
+- **Ubicación Docker**: `/server_data/bets.csv` (dentro del contenedor)
 
 El directorio `server/data/` se incluye en el repositorio para asegurar que funcione correctamente cuando alguien clone el proyecto. El archivo `bets.csv` se ignora en Git para evitar conflictos entre diferentes ejecuciones.
+
+**Ventajas del uso de `store_bets`:**
+- **Eficiencia**: Almacena múltiples apuestas en una sola operación de escritura
+- **Atomicidad**: Si falla el almacenamiento, ninguna apuesta se guarda
+- **Consistencia**: Mantiene la integridad de los datos del batch
 
 ### Logs del Servidor
 
@@ -749,13 +756,12 @@ bets = protocol.receive_batch(client_sock)
 
 # Procesar todas las apuestas
 success = True
-for bet in bets:
-    try:
-        store_bet(bet)
+try:
+    store_bets(bets)
+    for bet in bets:
         logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document}")
-    except Exception as e:
-        success = False
-        break
+except Exception as e:
+    success = False
 
 # Log del resultado del batch
 if success:
@@ -843,7 +849,7 @@ action: batch_processed | result: fail | client_id: 1 | batch: 1-10 | cantidad: 
 2. **Cliente**: Agrupa apuestas en batches según `maxAmount`
 3. **Cliente**: Envía batch completo al servidor
 4. **Servidor**: Recibe y decodifica el batch
-5. **Servidor**: Procesa cada apuesta individualmente
+5. **Servidor**: Almacena todas las apuestas del batch usando `store_bets(bets)`
 6. **Servidor**: Responde con éxito solo si todas las apuestas se procesaron correctamente
 7. **Cliente**: Recibe confirmación del batch completo
 

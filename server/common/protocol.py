@@ -2,7 +2,7 @@ import logging
 import socket
 import struct
 from typing import Optional, Tuple, List
-from .utils import Bet, store_bet
+from .utils import Bet, store_bets
 
 class Protocol:
     """Protocolo de comunicación propio sin JSON"""
@@ -262,14 +262,13 @@ class Protocol:
         
         try:
             # Almacenar todas las apuestas
-            for bet in bets:
-                try:
-                    store_bet(bet)
+            try:
+                store_bets(bets)
+                for bet in bets:
                     logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
-                except Exception as e:
-                    logging.error(f"action: apuesta_almacenada | result: fail | dni: {bet.document} | numero: {bet.number} | error: {e}")
-                    success = False
-                    break
+            except Exception as e:
+                logging.error(f"action: apuesta_almacenada | result: fail | error: {e}")
+                success = False
             
             # Log del resultado del batch
             if success:
@@ -318,7 +317,7 @@ class Protocol:
         
         try:
             # Almacenar apuesta
-            store_bet(bet)
+            store_bets([bet])
             
             # Log de confirmación
             logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
@@ -345,14 +344,13 @@ class Protocol:
         
         try:
             # Almacenar todas las apuestas
-            for bet in bets:
-                try:
-                    store_bet(bet)
+            try:
+                store_bets(bets)
+                for bet in bets:
                     logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
-                except Exception as e:
-                    logging.error(f"action: apuesta_almacenada | result: fail | dni: {bet.document} | numero: {bet.number} | error: {e}")
-                    success = False
-                    break
+            except Exception as e:
+                logging.error(f"action: apuesta_almacenada | result: fail | error: {e}")
+                success = False
             
             # Log del resultado del batch
             if success:
@@ -383,7 +381,7 @@ class Protocol:
         
         try:
             # Almacenar apuesta
-            store_bet(bet)
+            store_bets([bet])
             
             # Log de confirmación
             logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")

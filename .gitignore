@@ -12,6 +12,7 @@ INSTRUCCIONES_VALIDACION.md
 RESUMEN_VALIDACION.md
 CIERRE_GRACEFUL.md
 RESUMEN_GRACEFUL_SHUTDOWN.md
+server/bets.csv
 test-graceful-shutdown.sh
 server/data/bets.csv
 run-local.sh
