@@ -289,7 +289,7 @@ Los campos deben enviarse al servidor para dejar registro de la apuesta. Al reci
 
 
 #### Servidor
-Emulará a la _central de Lotería Nacional_. Deberá recibir los campos de la cada apuesta desde los clientes y almacenar la información mediante la función `store_bet(...)` para control futuro de ganadores. La función `store_bet(...)` es provista por la cátedra y no podrá ser modificada por el alumno.
+Emulará a la _central de Lotería Nacional_. Deberá recibir los campos de la cada apuesta desde los clientes y almacenar la información mediante la función `store_bets(...)` para control futuro de ganadores. La función `store_bets(...)` es provista por la cátedra y no podrá ser modificada por el alumno.
 Al persistir se debe imprimir por log: `action: apuesta_almacenada | result: success | dni: ${DNI} | numero: ${NUMERO}`.
 
 #### Comunicación:
@@ -465,11 +465,12 @@ func extractAgencyID(filename string) string {
 #### Almacenamiento con Agency
 ```python
 # Servidor almacena apuestas con agency
-def store_bet(bet: Bet) -> None:
+def store_bets(bets: list[Bet]) -> None:
     with open(STORAGE_FILEPATH, 'a+') as file:
         writer = csv.writer(file, quoting=csv.QUOTE_MINIMAL)
-        writer.writerow([bet.agency, bet.first_name, bet.last_name,
-                        bet.document, bet.birthdate, bet.number])
+        for bet in bets:
+            writer.writerow([bet.agency, bet.first_name, bet.last_name,
+                            bet.document, bet.birthdate, bet.number])
 ```
 
 #### Consulta de Ganadores por Agencia

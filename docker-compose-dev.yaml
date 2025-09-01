@@ -9,7 +9,6 @@ services:
     volumes:
       - ./server/config.ini:/config.ini:ro
       - ./.data:/data:ro
-      - ./server/data:/server_data
     networks:
       - testing_net
 
