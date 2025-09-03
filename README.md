@@ -384,21 +384,6 @@ batch:
   maxAmount: 50  # Máximo 50 apuestas por batch (ajustado para < 8KB)
 ```
 
-### Almacenamiento de Apuestas
-
-Las apuestas procesadas se almacenan usando la función `store_bets(bets: list[Bet])` que:
-- **Funcionalidad**: Almacena múltiples apuestas en una sola operación
-- **Formato**: CSV con campos: agency, first_name, last_name, document, birthdate, number
-- **Ubicación Local**: `./server/data/bets.csv`
-- **Ubicación Docker**: `/server_data/bets.csv` (dentro del contenedor)
-
-El directorio `server/data/` se incluye en el repositorio para asegurar que funcione correctamente cuando alguien clone el proyecto. El archivo `bets.csv` se ignora en Git para evitar conflictos entre diferentes ejecuciones.
-
-**Ventajas del uso de `store_bets`:**
-- **Eficiencia**: Almacena múltiples apuestas en una sola operación de escritura
-- **Atomicidad**: Si falla el almacenamiento, ninguna apuesta se guarda
-- **Consistencia**: Mantiene la integridad de los datos del batch
-
 ### Logs del Servidor
 
 - **Éxito**: `action: apuesta_recibida | result: success | cantidad: ${CANTIDAD}`
@@ -482,9 +467,6 @@ El protocolo está configurado para:
 - **Tamaño máximo**: 8KB por mensaje
 - **Timeout**: Sin timeout específico (usa configuración del socket)
 - **Codificación**: UTF-8 para strings
-
-# Protocolo de Comunicación Propio - TP0
-
 
 ## Estructura del Protocolo
 
