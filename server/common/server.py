@@ -58,9 +58,8 @@ class Server:
         """Limpia el archivo de apuestas al iniciar el servidor"""
         try:
             from .utils import STORAGE_FILEPATH
-            # Crear archivo vacío
             with open(STORAGE_FILEPATH, 'w') as file:
-                pass  # Crear archivo vacío
+                pass 
             logging.info(f'action: clear_bets_file | result: success')
         except Exception as e:
             logging.error(f'action: clear_bets_file | result: fail | error: {e}')
@@ -71,7 +70,6 @@ class Server:
             from .utils import load_bets, has_won
             
             winners = []
-            # load_bets() es un generador, necesitamos iterarlo
             for bet in load_bets():
                 if str(bet.agency) == agency_id and has_won(bet):
                     winners.append(bet.document)
@@ -201,12 +199,10 @@ class Server:
                                 if not self._lottery_completed:
                                     # Lottery not completed yet, send empty response
                                     self._protocol.send_winners_response(client_sock, [])
-                                    #logging.warning(f'action: winners_query | result: pending | agency: {agency_id}')
                                 else:
                                     # Get winners for this agency
                                     winners = self._get_winners_for_agency(agency_id)
                                     self._protocol.send_winners_response(client_sock, winners)
-                                    #logging.info(f'action: winners_query | result: success | agency: {agency_id} | winners: {len(winners)}')
                         except Exception as e:
                             logging.error(f'action: winners_query | result: fail | ip: {addr[0]} | error: {e}')
                             break

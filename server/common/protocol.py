@@ -4,15 +4,11 @@ import struct
 from typing import Optional, Tuple, List
 from .utils import Bet, store_bets
 
-class Protocol:
-    """Protocolo de comunicación propio sin JSON"""
-    
-    # Constantes del protocolo
+class Protocol:    
     DELIMITER = b'\xFF'
     HEADER_SIZE = 5  # 4 bytes longitud + 1 byte tipo
     MAX_MESSAGE_SIZE = 8192  # 8KB máximo
     
-    # Tipos de mensaje
     MSG_BET = 0x01
     MSG_BATCH = 0x02
     MSG_SUCCESS = 0x03
@@ -72,7 +68,6 @@ class Protocol:
             # Leer header (longitud + tipo)
             header = self._read_exact(client_sock, self.HEADER_SIZE)
             if not header:
-                # Connection was closed by client, this is normal
                 return None
             
             # Parsear header
