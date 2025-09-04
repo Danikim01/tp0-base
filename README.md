@@ -944,8 +944,223 @@ El protocolo está configurado para:
 - **Mutex**: Protege acceso a la conexión del socket
 - **Context**: Manejo de cancelación graceful
 - **Signal handlers**: Captura de SIGTERM/SIGINT
+- **Retry automático**: Sistema de reintentos para consulta de ganadores
 
 ### Servidor (Python)
 - **Threading**: Preparado para múltiples conexiones concurrentes
 - **Locks**: Protección de recursos compartidos
 - **Graceful shutdown**: Cierre ordenado de conexiones
+- **Estado compartido**: Control de agencias finalizadas y estado del sorteo
+
+## Mecanismo de Retry
+
+### Cliente - Consulta de Ganadores con Retry
+
+El cliente implementa un sistema robusto de reintentos automáticos para la consulta de ganadores:
+
+```go
+func (c *Client) queryWinnersWithRetry() ([]string, error) {
+    maxRetries := 300
+    retryDelay := time.Second * 2
+    
+    for attempt := 1; attempt <= maxRetries; attempt++ {
+        // Crear nueva conexión para cada intento
+        if err := c.createClientSocket(); err != nil {
+            return nil, err
+        }
+        
+        // Consultar ganadores
+        if err := c.protocol.SendWinnersQuery(c.conn, c.config.ID); err != nil {
+            c.closeClientSocket()
+            return nil, err
+        }
+        
+        // Recibir respuesta
+        msgType, _, err := c.protocol.ReceiveMessage(c.conn)
+        c.closeClientSocket()
+        
+        switch msgType {
+        case MSG_WINNERS_RESPONSE:
+            // Procesar ganadores y retornar
+            return winners, nil
+            
+        case MSG_RETRY:
+            // El servidor indica que debe esperar
+            if attempt < maxRetries {
+                time.Sleep(retryDelay)
+                continue
+            }
+        }
+    }
+    
+    return nil, fmt.Errorf("máximo número de reintentos alcanzado")
+}
+```
+
+**Características del retry:**
+- **Máximo 300 intentos** con delay de 2 segundos entre intentos
+- **Nueva conexión por intento** para evitar problemas de socket
+- **Manejo de mensaje MSG_RETRY** del servidor
+- **Logs detallados** de cada intento y resultado
+
+### Servidor - Respuesta de Retry
+
+El servidor responde con `MSG_RETRY` cuando el sorteo aún no está completo:
+
+```python
+def send_retry_response(self, client_sock: socket.socket, message: str = "Lottery not completed yet") -> bool:
+    """
+    Envía respuesta de retry al cliente indicando que debe esperar
+    """
+    payload = self._encode_string(message)
+    return self.send_message(client_sock, self.MSG_RETRY, payload)
+```
+
+**Lógica del servidor:**
+- Verifica si todas las agencias han finalizado (`len(self._finished_agencies) >= self._expected_agencies`)
+- Si no están todas finalizadas, envía `MSG_RETRY` con mensaje informativo
+- Si están todas finalizadas, procesa y envía los ganadores
+
+## Uso de Locks en Servidor No Concurrente
+
+Aunque el servidor actual no implementa concurrencia (una conexión por vez), se utilizan locks por las siguientes razones:
+
+### 1. **Preparación para Concurrencia Futura**
+```python
+# Locks preparados para cuando se implemente threading
+self._connections_lock = threading.Lock()  # Para lista de conexiones activas
+self._threads_lock = threading.Lock()      # Para pool de threads
+self._storage_lock = threading.Lock()      # Para operaciones de persistencia
+self._state_lock = threading.Lock()        # Para estado del sorteo
+```
+
+### 2. **Protección de Estado Compartido**
+```python
+def _mark_agency_finished(self, agency_id: str):
+    """Marca una agencia como finalizada y verifica si todas terminaron"""
+    with self._state_lock:
+        self._finished_agencies.add(agency_id)
+        logging.info(f'action: agency_finished | result: success | agency: {agency_id}')
+```
+
+### 3. **Operaciones de Persistencia**
+```python
+# Las funciones de la cátedra (store_bets, load_bets, has_won) 
+# pueden no ser thread-safe, por lo que se protegen con locks
+with self._storage_lock:
+    store_bets([bet])
+```
+
+### 4. **Graceful Shutdown Thread-Safe**
+```python
+def _graceful_shutdown(self):
+    """Perform graceful shutdown of all resources"""
+    with self._connections_lock:
+        for client_sock in self._active_connections:
+            try:
+                client_sock.close()
+            except Exception as e:
+                logging.error(f'action: close_client_connection | result: fail | error: {e}')
+```
+
+### 5. **Detección Automática de Agencias**
+```python
+def _detect_expected_agencies(self) -> int:
+    """Detecta automáticamente cuántas agencias se esperan"""
+    try:
+        # Usar variable de entorno EXPECTED_AGENCIES
+        env_count = os.environ.get('EXPECTED_AGENCIES')
+        if env_count:
+            return int(env_count)
+        
+        # Fallback: detectar archivos CSV disponibles
+        data_dir = os.path.join(os.path.dirname(__file__), '..', '..', '.data')
+        if os.path.exists(data_dir):
+            csv_files = [f for f in os.listdir(data_dir) if f.startswith('agency-') and f.endswith('.csv')]
+            return len(csv_files)
+        
+        return 5  # Valor por defecto
+    except Exception:
+        return 5  # Valor por defecto en caso de error
+```
+
+## Graceful Shutdown Mejorado
+
+### Cliente (Go)
+```go
+func (c *Client) setupSignalHandlers() {
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+    
+    go func() {
+        sig := <-sigChan
+        log.Infof("action: signal_received | result: success | signal: %v", sig)
+        c.gracefulShutdown()
+        os.Exit(0)
+    }()
+}
+
+func (c *Client) gracefulShutdown() {
+    log.Info("action: graceful_shutdown | result: in_progress")
+    
+    // Cancelar contexto para interrumpir loops
+    c.cancel()
+    
+    // Cerrar conexión si está abierta
+    if c.conn != nil {
+        c.conn.Close()
+        log.Info("action: close_connection | result: success")
+    }
+    
+    log.Info("action: graceful_shutdown | result: success")
+}
+```
+
+### Servidor (Python)
+```python
+def _signal_handler(self, signum, frame):
+    """Handle shutdown signals gracefully"""
+    logging.info(f'action: signal_received | result: success | signal: {signum}')
+    self._shutdown_requested = True
+    self._graceful_shutdown()
+    sys.exit(0)
+
+def _graceful_shutdown(self):
+    """Perform graceful shutdown of all resources"""
+    logging.info('action: graceful_shutdown | result: in_progress')
+    
+    # Close all active client connections
+    with self._connections_lock:
+        for client_sock in self._active_connections:
+            try:
+                client_sock.close()
+                logging.info('action: close_client_connection | result: success')
+            except Exception as e:
+                logging.error(f'action: close_client_connection | result: fail | error: {e}')
+    
+    # Close server socket
+    try:
+        self._server_socket.close()
+        logging.info('action: close_server_socket | result: success')
+    except Exception as e:
+        logging.error(f'action: close_server_socket | result: fail | error: {e}')
+    
+    logging.info('action: graceful_shutdown | result: success')
+```
+
+## Logs de Retry y Sincronización
+
+### Logs del Cliente
+```
+action: retry_message | result: success | client_id: 1 | attempt: 1 | message: Lottery not completed yet. 2/5 agencies finished.
+action: retry_wait | result: in_progress | client_id: 1 | attempt: 1/300 | delay: 2s
+action: consulta_ganadores | result: success | cant_ganadores: 3
+```
+
+### Logs del Servidor
+```
+action: sorteo | result: in_progress | agencies_finished: 2/5
+action: sorteo | result: success
+action: agency_finished | result: success | agency: 1
+action: agency_finished | result: success | agency: 2
+```
