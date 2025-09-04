@@ -475,46 +475,6 @@ def _get_winners_for_agency(self, agency_id: str) -> list[str]:
     return winners
 ```
 
-### Cambios Implementados para Solucionar Problemas
-
-#### Cambios en el Protocolo
-
-**Antes**:
-```go
-type Bet struct {
-    Nombre     string
-    Apellido   string
-    DNI        string
-    Nacimiento string
-    Numero     string
-}
-```
-
-**Después**:
-```go
-type Bet struct {
-    Agency     string  // Nuevo campo
-    Nombre     string
-    Apellido   string
-    DNI        string
-    Nacimiento string
-    Numero     string
-}
-```
-
-**Codificación Actualizada**:
-```go
-// Cliente
-payload = append(payload, p.encodeString(bet.Agency)...)    // Nuevo campo
-payload = append(payload, p.encodeString(bet.Nombre)...)
-// ... resto de campos
-
-// Servidor
-payload += self._encode_string(str(bet.agency))  // Nuevo campo
-payload += self._encode_string(bet.first_name)
-// ... resto de campos
-```
-
 ### Funciones Principales del Protocolo
 
 #### Envío de Mensajes
@@ -841,7 +801,7 @@ Donde:
 
 ```go
 type Bet struct {
-    Agency     string  // ID de la agencia (nuevo campo)
+    Agency     string  
     Nombre     string
     Apellido   string
     DNI        string
@@ -856,7 +816,7 @@ type Bet struct {
 // Cliente (Go)
 func (p *Protocol) EncodeBet(bet Bet) []byte {
     payload := make([]byte, 0)
-    payload = append(payload, p.encodeString(bet.Agency)...)    // Nuevo campo
+    payload = append(payload, p.encodeString(bet.Agency)...)  
     payload = append(payload, p.encodeString(bet.Nombre)...)
     payload = append(payload, p.encodeString(bet.Apellido)...)
     payload = append(payload, p.encodeString(bet.DNI)...)
@@ -870,7 +830,7 @@ func (p *Protocol) EncodeBet(bet Bet) []byte {
 # Servidor (Python)
 def encode_bet(self, bet: Bet) -> bytes:
     payload = b""
-    payload += self._encode_string(str(bet.agency))  # Nuevo campo
+    payload += self._encode_string(str(bet.agency)) 
     payload += self._encode_string(bet.first_name)
     payload += self._encode_string(bet.last_name)
     payload += self._encode_string(bet.document)
