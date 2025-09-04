@@ -218,8 +218,11 @@ class Server:
                             agency_id, _ = self._protocol._decode_string(payload, offset)
                             # Check if lottery is completed
                             with self._state_lock:
+                                if not self._lottery_completed and len(self._finished_agencies) >= self._expected_agencies:
+                                    logging.info(f'action: sorteo | result: success')
+
                                 if len(self._finished_agencies) >= self._expected_agencies:
-                                        logging.info(f'action: sorteo | result: success')
+                                        self._lottery_completed = True
                                         winners = self._get_winners_for_agency(agency_id)
                                         self._protocol.send_winners_response(client_sock, winners)
                                 else:
