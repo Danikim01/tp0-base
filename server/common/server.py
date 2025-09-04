@@ -3,6 +3,8 @@ import logging
 import signal
 import sys
 import threading
+import os
+import glob
 from .protocol import Protocol
 
 
@@ -19,12 +21,20 @@ class Server:
         self._active_connections = []
         self._connections_lock = threading.Lock()
         
+        # Thread pool for handling client connections
+        self._client_threads = []
+        self._threads_lock = threading.Lock()
+        
+        # Lock para proteger las operaciones de persistencia (funciones de la cátedra)
+        self._storage_lock = threading.Lock()
+        
         # Protocol for handling bets
         self._protocol = Protocol()
         
         # State for tracking finished agencies and lottery status
         self._finished_agencies = set()
         self._lottery_completed = False
+        self._expected_agencies = self._detect_expected_agencies()
         self._state_lock = threading.Lock()
         
         # Limpiar archivo de apuestas al iniciar el servidor
@@ -33,6 +43,25 @@ class Server:
         # Set up signal handlers
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
+
+    def _detect_expected_agencies(self) -> int:
+        """Detecta automáticamente cuántas agencias se esperan"""
+        try:
+            # Buscar archivos agency-*.csv en .data
+            data_dir = ".data" if os.path.exists(".data") else "/data"
+            agency_files = glob.glob(os.path.join(data_dir, "agency-*.csv"))
+            
+            if agency_files:
+                # Contar archivos de agencias
+                expected_count = len(agency_files)
+                return expected_count
+            else:
+                # Fallback: 1 agencia por defecto
+                return 1
+                
+        except Exception as e:
+            logging.error(f'action: detect_agencies | result: fail | error: {e} | using_default: 1')
+            return 1
 
     def _signal_handler(self, signum, frame):
         """Handle SIGTERM and SIGINT signals for graceful shutdown"""
@@ -46,12 +75,11 @@ class Server:
             self._finished_agencies.add(agency_id)
             logging.info(f'action: agency_finished | result: success | agency: {agency_id}')
             
-            # Marcar el sorteo como completado cuando al menos una agencia termina
-            # Esto permite que funcione con cualquier cantidad de agencias
-            if not self._lottery_completed:
-                self._lottery_completed = True
-                logging.info('action: sorteo | result: success')
-                return True
+            if len(self._finished_agencies) >= self._expected_agencies:
+                if not self._lottery_completed:
+                    self._lottery_completed = True
+                    logging.info(f'action: sorteo | result: success')
+                    return True
             return False
     
     def _clear_bets_file(self):
