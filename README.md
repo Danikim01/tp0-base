@@ -93,17 +93,160 @@ python3 mi-generador.py $1 $2
 
 En el archivo de Docker Compose de salida se pueden definir volúmenes, variables de entorno y redes con libertad, pero recordar actualizar este script cuando se modifiquen tales definiciones en los sucesivos ejercicios.
 
+#### Cómo ejecutar el Ejercicio 1:
+
+1. **Generar el archivo docker-compose con una cantidad específica de clientes:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+   Este comando generará un archivo `docker-compose-dev.yaml` con 3 clientes (client1, client2, client3).
+
+2. **Verificar el archivo generado:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+
+3. **Ejecutar el sistema con los clientes generados:**
+   ```bash
+   make docker-compose-up
+   ```
+
+4. **Ver los logs de todos los clientes:**
+   ```bash
+   make docker-compose-logs
+   ```
+
+5. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Ejemplo de uso:**
+```bash
+# Generar compose con 5 clientes
+./generar-compose.sh docker-compose-dev.yaml 5
+
+# Iniciar el sistema
+make docker-compose-up
+
+# Ver logs específicos de un cliente
+make docker-compose-logs | grep client3
+
+# Detener el sistema
+make docker-compose-down
+```
+
 ### Ejercicio N°2:
 Modificar el cliente y el servidor para lograr que realizar cambios en el archivo de configuración no requiera reconstruír las imágenes de Docker para que los mismos sean efectivos. La configuración a través del archivo correspondiente (`config.ini` y `config.yaml`, dependiendo de la aplicación) debe ser inyectada en el container y persistida por fuera de la imagen (hint: `docker volumes`).
 
+#### Cómo ejecutar el Ejercicio 2:
+
+1. **Modificar los archivos de configuración sin reconstruir imágenes:**
+   ```bash
+   # Editar configuración del servidor
+   nano server/config.ini
+   
+   # Editar configuración del cliente
+   nano client/config.yaml
+   ```
+
+2. **Generar el docker-compose con volúmenes configurados:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+
+3. **Verificar que los volúmenes están montados correctamente:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+   Los volúmenes deberían aparecer como:
+   ```yaml
+   volumes:
+     - ./server/config.ini:/config.ini:ro
+     - ./client/config.yaml:/config.yaml:ro
+   ```
+
+4. **Ejecutar el sistema (sin rebuild):**
+   ```bash
+   make docker-compose-up
+   ```
+
+5. **Probar cambios en configuración en caliente:**
+   ```bash
+   # Modificar configuración (ej: cambiar log level)
+   sed -i 's/INFO/DEBUG/' server/config.ini
+   
+   # Reiniciar solo los containers (sin rebuild)
+   make docker-compose-down
+   make docker-compose-up
+   ```
+
+6. **Verificar que los cambios se aplicaron:**
+   ```bash
+   make docker-compose-logs | grep "DEBUG"
+   ```
+
+**Ventajas del uso de volúmenes:**
+- Cambios en configuración sin reconstruir imágenes
+- Configuración persistente fuera del container
+- Desarrollo más ágil y eficiente
 
 ### Ejercicio N°3:
 Crear un script de bash `validar-echo-server.sh` que permita verificar el correcto funcionamiento del servidor utilizando el comando `netcat` para interactuar con el mismo. Dado que el servidor es un echo server, se debe enviar un mensaje al servidor y esperar recibir el mismo mensaje enviado.
 
 En caso de que la validación sea exitosa imprimir: `action: test_echo_server | result: success`, de lo contrario imprimir:`action: test_echo_server | result: fail`.
 
-El script deberá ubicarse en la raíz del proyecto. Netcat no debe ser instalado en la máquina _host_ y no se pueden exponer puertos del servidor para realizar la comunicación (hint: `docker network`). `
+El script deberá ubicarse en la raíz del proyecto. Netcat no debe ser instalado en la máquina _host_ y no se pueden exponer puertos del servidor para realizar la comunicación (hint: `docker network`).
 
+#### Cómo ejecutar el Ejercicio 3:
+
+1. **Iniciar el servidor en modo detached:**
+   ```bash
+   # Generar compose con al menos 1 cliente
+   ./generar-compose.sh docker-compose-dev.yaml 1
+   
+   # Iniciar solo el servidor
+   make docker-compose-up
+   ```
+
+2. **Ejecutar el script de validación:**
+   ```bash
+   ./validar-echo-server.sh
+   ```
+
+3. **Verificar la salida esperada:**
+   - **Éxito**: `action: test_echo_server | result: success`
+   - **Fallo**: `action: test_echo_server | result: fail`
+
+4. **Ejemplo de uso completo:**
+   ```bash
+   # Iniciar el sistema
+   make docker-compose-up
+   
+   # En otra terminal, ejecutar validación
+   ./validar-echo-server.sh
+   
+   # Detener el sistema
+   make docker-compose-down
+   ```
+
+5. **Debugging (si falla la validación):**
+   ```bash
+   # Ver logs del servidor
+   make docker-compose-logs | grep server
+   
+   # Verificar que el servidor está corriendo
+   docker ps | grep server
+   
+   # Verificar la red Docker
+   docker network ls | grep testing_net
+   ```
+
+**Características del script:**
+- Usa `netcat` desde dentro de un container (no requiere instalación en host)
+- Utiliza la red Docker interna (`testing_net`) para comunicarse
+- No expone puertos externos del servidor
+- Valida que el mensaje enviado sea el mismo que el recibido
 
 ### Ejercicio N°4:
 Modificar servidor y cliente para que ambos sistemas terminen de forma _graceful_ al recibir la signal SIGTERM. Terminar la aplicación de forma _graceful_ implica que todos los _file descriptors_ (entre los que se encuentran archivos, sockets, threads y procesos) deben cerrarse correctamente antes que el thread de la aplicación principal muera. Loguear mensajes en el cierre de cada recurso (hint: Verificar que hace el flag `-t` utilizado en el comando `docker compose down`).
