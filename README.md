@@ -475,46 +475,6 @@ def _get_winners_for_agency(self, agency_id: str) -> list[str]:
     return winners
 ```
 
-### Cambios Implementados para Solucionar Problemas
-
-#### Cambios en el Protocolo
-
-**Antes**:
-```go
-type Bet struct {
-    Nombre     string
-    Apellido   string
-    DNI        string
-    Nacimiento string
-    Numero     string
-}
-```
-
-**Después**:
-```go
-type Bet struct {
-    Agency     string  // Nuevo campo
-    Nombre     string
-    Apellido   string
-    DNI        string
-    Nacimiento string
-    Numero     string
-}
-```
-
-**Codificación Actualizada**:
-```go
-// Cliente
-payload = append(payload, p.encodeString(bet.Agency)...)    // Nuevo campo
-payload = append(payload, p.encodeString(bet.Nombre)...)
-// ... resto de campos
-
-// Servidor
-payload += self._encode_string(str(bet.agency))  // Nuevo campo
-payload += self._encode_string(bet.first_name)
-// ... resto de campos
-```
-
 ### Funciones Principales del Protocolo
 
 #### Envío de Mensajes
@@ -841,7 +801,7 @@ Donde:
 
 ```go
 type Bet struct {
-    Agency     string  // ID de la agencia (nuevo campo)
+    Agency     string
     Nombre     string
     Apellido   string
     DNI        string
@@ -856,7 +816,7 @@ type Bet struct {
 // Cliente (Go)
 func (p *Protocol) EncodeBet(bet Bet) []byte {
     payload := make([]byte, 0)
-    payload = append(payload, p.encodeString(bet.Agency)...)    // Nuevo campo
+    payload = append(payload, p.encodeString(bet.Agency)...)
     payload = append(payload, p.encodeString(bet.Nombre)...)
     payload = append(payload, p.encodeString(bet.Apellido)...)
     payload = append(payload, p.encodeString(bet.DNI)...)
@@ -870,7 +830,7 @@ func (p *Protocol) EncodeBet(bet Bet) []byte {
 # Servidor (Python)
 def encode_bet(self, bet: Bet) -> bytes:
     payload = b""
-    payload += self._encode_string(str(bet.agency))  # Nuevo campo
+    payload += self._encode_string(str(bet.agency))
     payload += self._encode_string(bet.first_name)
     payload += self._encode_string(bet.last_name)
     payload += self._encode_string(bet.document)
@@ -937,20 +897,6 @@ El protocolo está configurado para:
 - **Tamaño máximo**: 8KB por mensaje
 - **Timeout**: Sin timeout específico (usa configuración del socket)
 - **Codificación**: UTF-8 para strings
-
-## Mecanismos de Sincronización
-
-### Cliente (Go)
-- **Mutex**: Protege acceso a la conexión del socket
-- **Context**: Manejo de cancelación graceful
-- **Signal handlers**: Captura de SIGTERM/SIGINT
-- **Retry automático**: Sistema de reintentos para consulta de ganadores
-
-### Servidor (Python)
-- **Threading**: Preparado para múltiples conexiones concurrentes
-- **Locks**: Protección de recursos compartidos
-- **Graceful shutdown**: Cierre ordenado de conexiones
-- **Estado compartido**: Control de agencias finalizadas y estado del sorteo
 
 ## Mecanismo de Retry
 
@@ -1020,150 +966,6 @@ def send_retry_response(self, client_sock: socket.socket, message: str = "Lotter
 - Verifica si todas las agencias han finalizado (`len(self._finished_agencies) >= self._expected_agencies`)
 - Si no están todas finalizadas, envía `MSG_RETRY` con mensaje informativo
 - Si están todas finalizadas, procesa y envía los ganadores
-
-## Uso de Locks en Servidor No Concurrente
-
-Aunque el servidor actual no implementa concurrencia (una conexión por vez), se utilizan locks por las siguientes razones:
-
-### 1. **Preparación para Concurrencia Futura**
-```python
-# Locks preparados para cuando se implemente threading
-self._connections_lock = threading.Lock()  # Para lista de conexiones activas
-self._threads_lock = threading.Lock()      # Para pool de threads
-self._storage_lock = threading.Lock()      # Para operaciones de persistencia
-self._state_lock = threading.Lock()        # Para estado del sorteo
-```
-
-### 2. **Protección de Estado Compartido**
-```python
-def _mark_agency_finished(self, agency_id: str):
-    """Marca una agencia como finalizada y verifica si todas terminaron"""
-    with self._state_lock:
-        self._finished_agencies.add(agency_id)
-        logging.info(f'action: agency_finished | result: success | agency: {agency_id}')
-```
-
-### 3. **Operaciones de Persistencia**
-```python
-# Las funciones de la cátedra (store_bets, load_bets, has_won) 
-# pueden no ser thread-safe, por lo que se protegen con locks
-with self._storage_lock:
-    store_bets([bet])
-```
-
-### 4. **Graceful Shutdown Thread-Safe**
-```python
-def _graceful_shutdown(self):
-    """Perform graceful shutdown of all resources"""
-    with self._connections_lock:
-        for client_sock in self._active_connections:
-            try:
-                client_sock.close()
-            except Exception as e:
-                logging.error(f'action: close_client_connection | result: fail | error: {e}')
-```
-
-### 5. **Detección Automática de Agencias**
-```python
-def _detect_expected_agencies(self) -> int:
-    """Detecta automáticamente cuántas agencias se esperan"""
-    try:
-        # Usar variable de entorno EXPECTED_AGENCIES
-        env_count = os.environ.get('EXPECTED_AGENCIES')
-        if env_count:
-            return int(env_count)
-        
-        # Fallback: detectar archivos CSV disponibles
-        data_dir = os.path.join(os.path.dirname(__file__), '..', '..', '.data')
-        if os.path.exists(data_dir):
-            csv_files = [f for f in os.listdir(data_dir) if f.startswith('agency-') and f.endswith('.csv')]
-            return len(csv_files)
-        
-        return 5  # Valor por defecto
-    except Exception:
-        return 5  # Valor por defecto en caso de error
-```
-
-## Graceful Shutdown Mejorado
-
-### Cliente (Go)
-```go
-func (c *Client) setupSignalHandlers() {
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-    
-    go func() {
-        sig := <-sigChan
-        log.Infof("action: signal_received | result: success | signal: %v", sig)
-        c.gracefulShutdown()
-        os.Exit(0)
-    }()
-}
-
-func (c *Client) gracefulShutdown() {
-    log.Info("action: graceful_shutdown | result: in_progress")
-    
-    // Cancelar contexto para interrumpir loops
-    c.cancel()
-    
-    // Cerrar conexión si está abierta
-    if c.conn != nil {
-        c.conn.Close()
-        log.Info("action: close_connection | result: success")
-    }
-    
-    log.Info("action: graceful_shutdown | result: success")
-}
-```
-
-### Servidor (Python)
-```python
-def _signal_handler(self, signum, frame):
-    """Handle shutdown signals gracefully"""
-    logging.info(f'action: signal_received | result: success | signal: {signum}')
-    self._shutdown_requested = True
-    self._graceful_shutdown()
-    sys.exit(0)
-
-def _graceful_shutdown(self):
-    """Perform graceful shutdown of all resources"""
-    logging.info('action: graceful_shutdown | result: in_progress')
-    
-    # Close all active client connections
-    with self._connections_lock:
-        for client_sock in self._active_connections:
-            try:
-                client_sock.close()
-                logging.info('action: close_client_connection | result: success')
-            except Exception as e:
-                logging.error(f'action: close_client_connection | result: fail | error: {e}')
-    
-    # Close server socket
-    try:
-        self._server_socket.close()
-        logging.info('action: close_server_socket | result: success')
-    except Exception as e:
-        logging.error(f'action: close_server_socket | result: fail | error: {e}')
-    
-    logging.info('action: graceful_shutdown | result: success')
-```
-
-## Logs de Retry y Sincronización
-
-### Logs del Cliente
-```
-action: retry_message | result: success | client_id: 1 | attempt: 1 | message: Lottery not completed yet. 2/5 agencies finished.
-action: retry_wait | result: in_progress | client_id: 1 | attempt: 1/300 | delay: 2s
-action: consulta_ganadores | result: success | cant_ganadores: 3
-```
-
-### Logs del Servidor
-```
-action: sorteo | result: in_progress | agencies_finished: 2/5
-action: sorteo | result: success
-action: agency_finished | result: success | agency: 1
-action: agency_finished | result: success | agency: 2
-```
 
 # Mejoras de Concurrencia - Ejercicio N°8
 
