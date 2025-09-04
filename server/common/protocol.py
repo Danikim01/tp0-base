@@ -5,14 +5,10 @@ from typing import Optional, Tuple, List
 from .utils import Bet, store_bets
 
 class Protocol:
-    """Protocolo de comunicación propio sin JSON"""
-    
-    # Constantes del protocolo
     DELIMITER = b'\xFF'
     HEADER_SIZE = 5  # 4 bytes longitud + 1 byte tipo
     MAX_MESSAGE_SIZE = 8192  # 8KB máximo
-    
-    # Tipos de mensaje
+
     MSG_BET = 0x01
     MSG_SUCCESS = 0x03
     MSG_ERROR = 0x04
