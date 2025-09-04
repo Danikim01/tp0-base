@@ -321,7 +321,7 @@ func (c *Client) queryWinnersWithRetry() ([]string, error) {
 				return nil, err
 			}
 			
-			log.Infof("action: retry_message | result: received | client_id: %v | attempt: %d | message: %s",
+			log.Infof("action: retry_message | result: success | client_id: %v | attempt: %d | message: %s",
 				c.config.ID, attempt, retryMessage)
 			
 			// Si no es el último intento, esperar y reintentar
