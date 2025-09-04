@@ -4,7 +4,6 @@ import signal
 import sys
 import threading
 import os
-import glob
 from .protocol import Protocol
 
 
