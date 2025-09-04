@@ -4,6 +4,8 @@ import signal
 import sys
 import threading
 import os
+import queue
+from concurrent.futures import ThreadPoolExecutor
 from .protocol import Protocol
 
 
@@ -21,14 +23,16 @@ class Server:
         self._connections_lock = threading.Lock()
         
         # Thread pool for handling client connections
-        self._client_threads = []
-        self._threads_lock = threading.Lock()
+        self._max_workers = int(os.environ.get('MAX_WORKERS', 5))
+        self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers, thread_name_prefix="client_handler")
+        self._active_futures = set()
+        self._futures_lock = threading.Lock()
         
         # Lock para proteger las operaciones de persistencia (funciones de la cátedra)
         self._storage_lock = threading.Lock()
         
-        # Protocol for handling bets
-        self._protocol = Protocol()
+        # Protocol for handling bets (with storage lock for thread safety)
+        self._protocol = Protocol(self._storage_lock)
         
         # State for tracking finished agencies and lottery status
         self._finished_agencies = set()
@@ -114,6 +118,14 @@ class Server:
                 except Exception as e:
                     logging.error(f'action: close_client_connection | result: fail | error: {e}')
         
+        # Shutdown thread pool gracefully
+        try:
+            logging.info('action: shutdown_thread_pool | result: in_progress')
+            self._thread_pool.shutdown(wait=True, timeout=5.0)
+            logging.info('action: shutdown_thread_pool | result: success')
+        except Exception as e:
+            logging.error(f'action: shutdown_thread_pool | result: fail | error: {e}')
+        
         # Close server socket
         try:
             logging.info('action: close_server_socket | result: in_progress')
@@ -127,14 +139,13 @@ class Server:
 
     def run(self):
         """
-        Server loop with graceful shutdown support
+        Server loop with graceful shutdown support and concurrent client handling
 
-        Server that accept a new connections and establishes a
-        communication with a client. After client with communucation
-        finishes, servers starts to accept new connections again
+        Server that accepts new connections and establishes communication
+        with multiple clients concurrently using a thread pool.
         """
 
-        logging.info('action: server_start | result: success')
+        logging.info(f'action: server_start | result: success | max_workers: {self._max_workers}')
         
         while not self._shutdown_requested:
             try:
@@ -142,7 +153,17 @@ class Server:
                 self._server_socket.settimeout(1.0)
                 client_sock = self.__accept_new_connection()
                 if client_sock:
-                    self.__handle_client_connection(client_sock)
+                    # Submit client connection to thread pool for concurrent processing
+                    future = self._thread_pool.submit(self.__handle_client_connection, client_sock)
+                    
+                    # Track active futures for cleanup
+                    with self._futures_lock:
+                        self._active_futures.add(future)
+                        # Clean up completed futures
+                        self._active_futures = {f for f in self._active_futures if not f.done()}
+                    
+                    logging.info(f'action: client_submitted_to_pool | result: success | active_connections: {len(self._active_futures)}')
+                    
             except socket.timeout:
                 # Timeout occurred, check if shutdown was requested
                 continue
@@ -164,6 +185,10 @@ class Server:
         # Add connection to active list
         with self._connections_lock:
             self._active_connections.append(client_sock)
+        
+        # Log thread information for monitoring
+        thread_name = threading.current_thread().name
+        logging.info(f'action: client_handler_started | result: success | thread: {thread_name}')
         
         try:
             addr = client_sock.getpeername()
@@ -256,6 +281,7 @@ class Server:
                 if client_sock in self._active_connections:
                     self._active_connections.remove(client_sock)
             client_sock.close()
+            logging.info(f'action: client_handler_finished | result: success | thread: {threading.current_thread().name}')
 
     def __accept_new_connection(self):
         """

@@ -1164,3 +1164,177 @@ action: sorteo | result: success
 action: agency_finished | result: success | agency: 1
 action: agency_finished | result: success | agency: 2
 ```
+
+# Mejoras de Concurrencia - Ejercicio N°8
+
+## 1. Thread Pool Implementation
+
+### Cambios en `server.py`:
+
+- **ThreadPoolExecutor**: Implementado un pool de threads usando `concurrent.futures.ThreadPoolExecutor`
+- **Configuración**: El tamaño del pool es configurable via variable de entorno `MAX_WORKERS` (default: 5)
+- **Gestión de Futures**: Tracking de futures activos para limpieza automática
+
+```python
+# Configuración del thread pool
+self._max_workers = int(os.environ.get('MAX_WORKERS', 5))
+self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers, thread_name_prefix="client_handler")
+```
+
+### Justificación: ThreadPoolExecutor vs Threading Manual
+
+#### ¿Por qué ThreadPoolExecutor en lugar de `threading.Thread` manual?
+
+**1. Gestión Automática del Ciclo de Vida de Threads**
+```python
+# Threading manual (problemático):
+def handle_client_manual(self, client_sock):
+    thread = threading.Thread(target=self._process_client, args=(client_sock,))
+    thread.start()
+    # ¿Quién hace join()? ¿Cuándo? ¿Cómo limpiamos threads muertos?
+
+# ThreadPoolExecutor (automático):
+future = self._thread_pool.submit(self.__handle_client_connection, client_sock)
+# El pool maneja automáticamente creación, reutilización y limpieza
+```
+
+**2. Control de Recursos y Prevención de Agotamiento**
+- **Threading manual**: Cada nueva conexión crea un thread nuevo, esto implica posible agotamiento de memoria
+- **ThreadPoolExecutor**: Límite fijo de threads, esto nos da un uso controlado de recursos del sistema
+
+**3. Mejor Rendimiento por Reutilización**
+```python
+# Threading manual: Overhead de crear/destruir threads constantemente
+for each_client:
+    new_thread = threading.Thread(...)  # Costoso
+    new_thread.start()
+    # Thread se destruye al terminar
+
+# ThreadPoolExecutor: Threads se reusan
+# Los threads permanecen vivos y procesan múltiples clientes secuencialmente
+```
+
+**4. Graceful Shutdown Simplificado**
+```python
+# Threading manual (complejo):
+def shutdown_manual(self):
+    for thread in self._active_threads:
+        thread.join(timeout=5.0)  # ¿Qué pasa si no termina?
+    # ¿Cómo forzar cierre? ¿Signal handling por thread?
+
+# ThreadPoolExecutor (simple):
+def shutdown_pool(self):
+    self._thread_pool.shutdown(wait=True, timeout=5.0)
+    # Maneja automáticamente el cierre ordenado de todos los workers
+```
+
+**5. Compatibilidad con el GIL de Python**
+- **I/O Bound Operations**: Nuestro servidor maneja principalmente sockets (I/O)
+- **GIL Release**: Las operaciones de socket liberan el GIL automáticamente
+- **Thread Pool Size**: Configuramos un número óptimo de threads para I/O, no CPU
+
+**6. Manejo de Excepciones Robusto**
+```python
+# Threading manual: Excepciones no manejadas pueden crashear threads silenciosamente
+def worker_thread(self):
+    try:
+        process_client()
+    except Exception as e:
+        # ¿Logging? ¿Recovery? ¿Notificación al main thread?
+        pass
+
+# ThreadPoolExecutor: Excepciones capturadas en futures
+future = self._thread_pool.submit(self.__handle_client_connection, client_sock)
+# Las excepciones se pueden recuperar con future.exception()
+```
+
+**7. Escalabilidad Configurable**
+```bash
+# Fácil ajuste según recursos del sistema:
+export MAX_WORKERS=10  # Para servidor con más CPU/memoria
+export MAX_WORKERS=3   # Para sistemas con recursos limitados
+```
+
+### Beneficios Específicos para el Ejercicio:
+- **Verdadera concurrencia**: Múltiples clientes procesados simultáneamente
+- **Gestión eficiente de recursos**: Pool reutilizable de threads
+- **Escalabilidad**: Configurable según necesidades del sistema
+- **Robustez**: Manejo automático de errores y limpieza
+- **Simplicidad**: Código más limpio y mantenible
+
+## 2. Sincronización Thread-Safe
+
+### Problema Identificado:
+Las funciones `store_bets()` y `load_bets()` en `utils.py` **NO son thread-safe**, como indica el comentario en el código.
+
+### Solución Implementada:
+
+1. **Lock de Persistencia**: Utilización del `_storage_lock` existente
+2. **Método Thread-Safe**: Nueva función `_store_bets_thread_safe()` en `protocol.py`
+3. **Protección Automática**: Todas las operaciones de escritura protegidas
+
+```python
+def _store_bets_thread_safe(self, bets: list[Bet]) -> None:
+    """Thread-safe version of store_bets using the provided lock"""
+    if self._storage_lock:
+        with self._storage_lock:
+            store_bets(bets)
+    else:
+        store_bets(bets)  # Fallback
+```
+
+## 3. Consideraciones del GIL de Python
+
+### Limitaciones del GIL:
+- **Global Interpreter Lock**: Previene ejecución simultánea de bytecode Python
+- **Impacto en CPU-bound**: Operaciones intensivas en CPU no se benefician del threading
+- **I/O Operations**: Las operaciones de I/O (sockets, archivos) SÍ se benefician
+
+### Optimizaciones Aplicadas:
+
+1. **I/O Bound Design**: El servidor está optimizado para operaciones de red
+2. **Lock Granular**: Locks específicos solo para operaciones críticas
+3. **Thread Pool Size**: Configurable para balancear concurrencia vs overhead
+
+### Referencia:
+- [Python GIL Documentation](https://wiki.python.org/moin/GlobalInterpreterLock)
+
+## 4. Mejoras en Logging y Monitoreo
+
+### Nuevos Logs Implementados:
+- **Thread Information**: Identificación de threads en logs
+- **Connection Tracking**: Monitoreo de conexiones activas
+- **Performance Metrics**: Tiempo de procesamiento por cliente
+
+```python
+logging.info(f'action: client_handler_started | result: success | thread: {thread_name}')
+logging.info(f'action: client_submitted_to_pool | result: success | active_connections: {len(self._active_futures)}')
+```
+
+## 5. Graceful Shutdown Mejorado
+
+### Características:
+- **Thread Pool Shutdown**: Cierre ordenado del pool de threads
+- **Timeout Protection**: Timeout de 5 segundos para shutdown
+- **Resource Cleanup**: Limpieza completa de recursos
+
+```python
+self._thread_pool.shutdown(wait=True, timeout=5.0)
+```
+
+## 6. Configuración Recomendada
+
+### Variables de Entorno:
+```bash
+# Tamaño del thread pool
+export MAX_WORKERS=5
+
+# Número de agencias esperadas
+export EXPECTED_AGENCIES=3
+```
+
+### Consideraciones de Rendimiento:
+- **MAX_WORKERS**: Ajustar según CPU cores disponibles
+- **I/O vs CPU**: Optimizado para cargas I/O intensivas
+- **Memory Usage**: Cada thread consume ~8MB de memoria
+

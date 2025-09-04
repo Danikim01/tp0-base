@@ -18,8 +18,17 @@ class Protocol:
     MSG_WINNERS_RESPONSE = 0x07
     MSG_RETRY = 0x08 # Nuevo tipo de mensaje para retry
 
-    def __init__(self):
-        pass
+    def __init__(self, storage_lock=None):
+        self._storage_lock = storage_lock
+    
+    def _store_bets_thread_safe(self, bets: list[Bet]) -> None:
+        """Thread-safe version of store_bets using the provided lock"""
+        if self._storage_lock:
+            with self._storage_lock:
+                store_bets(bets)
+        else:
+            # Fallback to non-thread-safe version if no lock provided
+            store_bets(bets)
     
     def _read_exact(self, sock: socket.socket, size: int) -> Optional[bytes]:
         """Lee exactamente 'size' bytes del socket"""
@@ -264,7 +273,7 @@ class Protocol:
         try:
             # Almacenar todas las apuestas
             try:
-                store_bets(bets)
+                self._store_bets_thread_safe(bets)
                 for bet in bets:
                     logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
             except Exception as e:
@@ -318,7 +327,7 @@ class Protocol:
         
         try:
             # Almacenar apuesta
-            store_bets([bet])
+            self._store_bets_thread_safe([bet])
             
             # Log de confirmación
             logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
@@ -346,7 +355,7 @@ class Protocol:
         try:
             # Almacenar todas las apuestas
             try:
-                store_bets(bets)
+                self._store_bets_thread_safe(bets)
                 for bet in bets:
                     logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
             except Exception as e:
@@ -456,7 +465,7 @@ class Protocol:
         
         try:
             # Almacenar apuesta
-            store_bets([bet])
+            self._store_bets_thread_safe([bet])
             
             # Log de confirmación
             logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
