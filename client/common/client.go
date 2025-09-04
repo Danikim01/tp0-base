@@ -326,7 +326,7 @@ func (c *Client) queryWinnersWithRetry() ([]string, error) {
 			
 			// Si no es el último intento, esperar y reintentar
 			if attempt < maxRetries {
-				log.Infof("action: retry_wait | result: waiting | client_id: %v | attempt: %d/%d | delay: %v",
+				log.Infof("action: retry_wait | result: in_progress | client_id: %v | attempt: %d/%d | delay: %v",
 					c.config.ID, attempt, maxRetries, retryDelay)
 				time.Sleep(retryDelay)
 				continue

@@ -224,7 +224,7 @@ class Server:
                                         self._protocol.send_winners_response(client_sock, winners)
                                 else:
                                     # Send to the client that the lottery is not completed
-                                    logging.info(f'action: sorteo | result: pending | agencies_finished: {len(self._finished_agencies)}/{self._expected_agencies}')
+                                    logging.info(f'action: sorteo | result: in_progress | agencies_finished: {len(self._finished_agencies)}/{self._expected_agencies}')
                                     self._protocol.send_retry_response(client_sock, f"Lottery not completed yet. {len(self._finished_agencies)}/{self._expected_agencies} agencies finished.")
                         
                         except Exception as e:
