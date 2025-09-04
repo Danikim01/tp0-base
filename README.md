@@ -152,6 +152,7 @@ Si prefieres ejecutar el sistema localmente sin Docker, sigue estos pasos:
   - `CLI_LOOP_PERIOD`: Período entre mensajes (ej: `5s`, `150ms`)
   - `CLI_LOG_LEVEL`: Nivel de logging
 
+
 ### Configuración de Variables de Entorno
 
 #### Para el Cliente (Agencia de Quiniela):
@@ -259,20 +260,231 @@ python3 mi-generador.py $1 $2
 
 En el archivo de Docker Compose de salida se pueden definir volúmenes, variables de entorno y redes con libertad, pero recordar actualizar este script cuando se modifiquen tales definiciones en los sucesivos ejercicios.
 
+#### Cómo ejecutar el Ejercicio 1:
+
+1. **Generar el archivo docker-compose con una cantidad específica de clientes:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+   Este comando generará un archivo `docker-compose-dev.yaml` con 3 clientes (client1, client2, client3).
+
+2. **Verificar el archivo generado:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+
+3. **Ejecutar el sistema con los clientes generados:**
+   ```bash
+   make docker-compose-up
+   ```
+
+4. **Ver los logs de todos los clientes:**
+   ```bash
+   make docker-compose-logs
+   ```
+
+5. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Ejemplo de uso:**
+```bash
+# Generar compose con 5 clientes
+./generar-compose.sh docker-compose-dev.yaml 5
+
+# Iniciar el sistema
+make docker-compose-up
+
+# Ver logs específicos de un cliente
+make docker-compose-logs | grep client3
+
+# Detener el sistema
+make docker-compose-down
+```
+
 ### Ejercicio N°2:
 Modificar el cliente y el servidor para lograr que realizar cambios en el archivo de configuración no requiera reconstruír las imágenes de Docker para que los mismos sean efectivos. La configuración a través del archivo correspondiente (`config.ini` y `config.yaml`, dependiendo de la aplicación) debe ser inyectada en el container y persistida por fuera de la imagen (hint: `docker volumes`).
 
+#### Cómo ejecutar el Ejercicio 2:
+
+1. **Modificar los archivos de configuración sin reconstruir imágenes:**
+   ```bash
+   # Editar configuración del servidor
+   nano server/config.ini
+   
+   # Editar configuración del cliente
+   nano client/config.yaml
+   ```
+
+2. **Generar el docker-compose con volúmenes configurados:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+
+3. **Verificar que los volúmenes están montados correctamente:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+   Los volúmenes deberían aparecer como:
+   ```yaml
+   volumes:
+     - ./server/config.ini:/config.ini:ro
+     - ./client/config.yaml:/config.yaml:ro
+   ```
+
+4. **Ejecutar el sistema (sin rebuild):**
+   ```bash
+   make docker-compose-up
+   ```
+
+5. **Probar cambios en configuración en caliente:**
+   ```bash
+   # Modificar configuración (ej: cambiar log level)
+   sed -i 's/INFO/DEBUG/' server/config.ini
+   
+   # Reiniciar solo los containers (sin rebuild)
+   make docker-compose-down
+   make docker-compose-up
+   ```
+
+6. **Verificar que los cambios se aplicaron:**
+   ```bash
+   make docker-compose-logs | grep "DEBUG"
+   ```
+
+**Ventajas del uso de volúmenes:**
+- Cambios en configuración sin reconstruir imágenes
+- Configuración persistente fuera del container
+- Desarrollo más ágil y eficiente
 
 ### Ejercicio N°3:
 Crear un script de bash `validar-echo-server.sh` que permita verificar el correcto funcionamiento del servidor utilizando el comando `netcat` para interactuar con el mismo. Dado que el servidor es un echo server, se debe enviar un mensaje al servidor y esperar recibir el mismo mensaje enviado.
 
 En caso de que la validación sea exitosa imprimir: `action: test_echo_server | result: success`, de lo contrario imprimir:`action: test_echo_server | result: fail`.
 
-El script deberá ubicarse en la raíz del proyecto. Netcat no debe ser instalado en la máquina _host_ y no se pueden exponer puertos del servidor para realizar la comunicación (hint: `docker network`). `
+El script deberá ubicarse en la raíz del proyecto. Netcat no debe ser instalado en la máquina _host_ y no se pueden exponer puertos del servidor para realizar la comunicación (hint: `docker network`).
 
+#### Cómo ejecutar el Ejercicio 3:
+
+1. **Iniciar el servidor en modo detached:**
+   ```bash
+   # Generar compose con al menos 1 cliente
+   ./generar-compose.sh docker-compose-dev.yaml 1
+   
+   # Iniciar solo el servidor
+   make docker-compose-up
+   ```
+
+2. **Ejecutar el script de validación:**
+   ```bash
+   ./validar-echo-server.sh
+   ```
+
+3. **Verificar la salida esperada:**
+   - **Éxito**: `action: test_echo_server | result: success`
+   - **Fallo**: `action: test_echo_server | result: fail`
+
+4. **Ejemplo de uso completo:**
+   ```bash
+   # Iniciar el sistema
+   make docker-compose-up
+   
+   # En otra terminal, ejecutar validación
+   ./validar-echo-server.sh
+   
+   # Detener el sistema
+   make docker-compose-down
+   ```
+
+5. **Debugging (si falla la validación):**
+   ```bash
+   # Ver logs del servidor
+   make docker-compose-logs | grep server
+   
+   # Verificar que el servidor está corriendo
+   docker ps | grep server
+   
+   # Verificar la red Docker
+   docker network ls | grep testing_net
+   ```
+
+**Características del script:**
+- Usa `netcat` desde dentro de un container (no requiere instalación en host)
+- Utiliza la red Docker interna (`testing_net`) para comunicarse
+- No expone puertos externos del servidor
+- Valida que el mensaje enviado sea el mismo que el recibido
 
 ### Ejercicio N°4:
 Modificar servidor y cliente para que ambos sistemas terminen de forma _graceful_ al recibir la signal SIGTERM. Terminar la aplicación de forma _graceful_ implica que todos los _file descriptors_ (entre los que se encuentran archivos, sockets, threads y procesos) deben cerrarse correctamente antes que el thread de la aplicación principal muera. Loguear mensajes en el cierre de cada recurso (hint: Verificar que hace el flag `-t` utilizado en el comando `docker compose down`).
+
+#### Cómo ejecutar el Ejercicio 4:
+
+1. **Iniciar el sistema normalmente:**
+   ```bash
+   # Generar compose
+   ./generar-compose.sh docker-compose-dev.yaml 2
+   
+   # Iniciar el sistema
+   make docker-compose-up
+   ```
+
+2. **Probar el graceful shutdown con timeout:**
+   ```bash
+   # Usar el flag -t para especificar timeout (por defecto es 10s)
+   docker compose -f docker-compose-dev.yaml down -t 5
+   ```
+
+3. **Verificar los logs de cierre graceful:**
+   ```bash
+   # Ver los logs antes de hacer down
+   make docker-compose-logs
+   
+   # Los logs deberían mostrar mensajes como:
+   # - "Received SIGTERM, shutting down gracefully"
+   # - "Closing socket connection"
+   # - "Cleaning up resources"
+   # - "Graceful shutdown completed"
+   ```
+
+4. **Probar diferentes escenarios:**
+   ```bash
+   # Shutdown rápido (2 segundos)
+   docker compose down -t 2
+   
+   # Shutdown con más tiempo (15 segundos)
+   docker compose down -t 15
+   
+   # Shutdown inmediato (forzado)
+   docker compose down -t 0
+   ```
+
+5. **Monitorear el comportamiento:**
+   ```bash
+   # En una terminal, ver logs en tiempo real
+   make docker-compose-logs -f
+   
+   # En otra terminal, hacer el shutdown
+   make docker-compose-down
+   ```
+
+**Características del graceful shutdown:**
+- Manejo de señal SIGTERM en ambas aplicaciones
+- Cierre ordenado de sockets y file descriptors
+- Logs detallados del proceso de cierre
+- Timeout configurable para evitar bloqueos
+- Limpieza completa de recursos antes de terminar
+
+**Logs esperados durante el shutdown:**
+```
+server   | Received SIGTERM signal, initiating graceful shutdown
+server   | Closing server socket
+server   | All connections closed
+server   | Graceful shutdown completed
+client1  | Received SIGTERM signal, shutting down
+client1  | Closing client connection
+client1  | Client shutdown completed
+```
 
 ## Parte 2: Repaso de Comunicaciones
 
@@ -289,7 +501,7 @@ Los campos deben enviarse al servidor para dejar registro de la apuesta. Al reci
 
 
 #### Servidor
-Emulará a la _central de Lotería Nacional_. Deberá recibir los campos de la cada apuesta desde los clientes y almacenar la información mediante la función `store_bets(...)` para control futuro de ganadores. La función `store_bets(...)` es provista por la cátedra y no podrá ser modificada por el alumno.
+Emulará a la _central de Lotería Nacional_. Deberá recibir los campos de la cada apuesta desde los clientes y almacenar la información mediante la función `store_bets(...)` para control futuro de ganadores.
 Al persistir se debe imprimir por log: `action: apuesta_almacenada | result: success | dni: ${DNI} | numero: ${NUMERO}`.
 
 #### Comunicación:
@@ -299,6 +511,69 @@ Se deberá implementar un módulo de comunicación entre el cliente y el servido
 * Correcta separación de responsabilidades entre modelo de dominio y capa de comunicación.
 * Correcto empleo de sockets, incluyendo manejo de errores y evitando los fenómenos conocidos como [_short read y short write_](https://cs61.seas.harvard.edu/site/2018/FileDescriptors/).
 
+#### Cómo ejecutar el Ejercicio 5:
+
+1. **Configurar las variables de entorno para las apuestas:**
+   ```bash
+   # Variables de la apuesta (ejemplo)
+   export NOMBRE="Santiago Lionel"
+   export APELLIDO="Lorca"
+   export DOCUMENTO="30904465"
+   export NACIMIENTO="1999-03-17"
+   export NUMERO="7574"
+   ```
+
+2. **Generar docker-compose con múltiples agencias (clientes):**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 5
+   ```
+
+3. **Iniciar el sistema de lotería:**
+   ```bash
+   make docker-compose-up
+   ```
+
+4. **Verificar los logs de apuestas:**
+   ```bash
+   # Ver logs del cliente (agencia)
+   make docker-compose-logs | grep "apuesta_enviada"
+   
+   # Ver logs del servidor (central)
+   make docker-compose-logs | grep "apuesta_almacenada"
+   ```
+
+5. **Ejemplo de logs esperados:**
+   ```
+   client1  | action: apuesta_enviada | result: success | dni: 30904465 | numero: 7574
+   server   | action: apuesta_almacenada | result: success | dni: 30904465 | numero: 7574
+   ```
+
+6. **Probar con diferentes agencias:**
+   ```bash
+   # Ver logs específicos de cada agencia
+   make docker-compose-logs | grep client1
+   make docker-compose-logs | grep client2
+   make docker-compose-logs | grep client3
+   ```
+
+7. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Características implementadas:**
+- Protocolo de comunicación binario personalizado
+- Serialización/deserialización de apuestas
+- Manejo de errores en sockets (short read/write)
+- Separación clara entre lógica de negocio y comunicación
+- Logs detallados para seguimiento de apuestas
+
+**Variables de entorno requeridas por cliente:**
+- `NOMBRE`: Nombre del apostador
+- `APELLIDO`: Apellido del apostador  
+- `DOCUMENTO`: DNI del apostador
+- `NACIMIENTO`: Fecha de nacimiento (formato: YYYY-MM-DD)
+- `NUMERO`: Número apostado
 
 ### Ejercicio N°6:
 Modificar los clientes para que envíen varias apuestas a la vez (modalidad conocida como procesamiento por _chunks_ o _batchs_). 
@@ -313,6 +588,79 @@ La cantidad máxima de apuestas dentro de cada _batch_ debe ser configurable des
 
 Por su parte, el servidor deberá responder con éxito solamente si todas las apuestas del _batch_ fueron procesadas correctamente.
 
+#### Cómo ejecutar el Ejercicio 6:
+
+1. **Preparar los archivos CSV de apuestas:**
+   ```bash
+   # Crear directorio de datos si no existe
+   mkdir -p .data
+   
+   # Los archivos CSV deberían estar en formato:
+   # Name,Surname,00000000,2000-01-01,7574
+   # Ejemplo: .data/agency-1.csv, .data/agency-2.csv, etc.
+   ```
+
+2. **Configurar el tamaño máximo de batch:**
+   ```bash
+   # Editar client/config.yaml
+   nano client/config.yaml
+   
+   # Asegurar que contenga:
+   # batch:
+   #   maxAmount: 50  # Máximo 50 apuestas por batch (< 8KB)
+   ```
+
+3. **Generar docker-compose con múltiples agencias:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+
+4. **Verificar que los volúmenes de datos están montados:**
+   ```bash
+   cat docker-compose-dev.yaml | grep -A2 -B2 "\.data"
+   ```
+
+5. **Iniciar el sistema de procesamiento por batches:**
+   ```bash
+   make docker-compose-up
+   ```
+
+6. **Verificar los logs de procesamiento por batches:**
+   ```bash
+   # Ver logs del servidor (batches recibidos)
+   make docker-compose-logs | grep "apuesta_recibida"
+   
+   # Ver logs del cliente (batches procesados)
+   make docker-compose-logs | grep "batch_processed"
+   ```
+
+7. **Ejemplo de logs esperados:**
+   ```
+   server   | action: apuesta_recibida | result: success | cantidad: 10
+   client1  | action: batch_processed | result: success | cantidad: 10
+   ```
+
+8. **Monitorear el progreso:**
+   ```bash
+   # Ver todas las apuestas almacenadas individualmente
+   make docker-compose-logs | grep "apuesta_almacenada"
+   
+   # Contar batches procesados
+   make docker-compose-logs | grep "batch_processed" | wc -l
+   ```
+
+9. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Características del procesamiento por batches:**
+- Archivos CSV leídos desde volúmenes Docker
+- Batches con tamaño configurable (máximo 8KB)
+- Procesamiento atómico: todo el batch debe ser exitoso
+- Logs detallados por batch y por apuesta individual
+- Volúmenes persistentes para datos
+
 ### Ejercicio N°7:
 
 Modificar los clientes para que notifiquen al servidor al finalizar con el envío de todas las apuestas y así proceder con el sorteo.
@@ -325,6 +673,99 @@ Luego de este evento, podrá verificar cada apuesta con las funciones `load_bets
 Las funciones `load_bets(...)` y `has_won(...)` son provistas por la cátedra y no podrán ser modificadas por el alumno.
 
 No es correcto realizar un broadcast de todos los ganadores hacia todas las agencias, se espera que se informen los DNIs ganadores que correspondan a cada una de ellas.
+
+#### Cómo ejecutar el Ejercicio 7:
+
+1. **Preparar los archivos CSV con apuestas de múltiples agencias:**
+   ```bash
+   # Asegurar que existen archivos para cada agencia
+   ls .data/agency-*.csv
+   
+   # Ejemplo de contenido:
+   # .data/agency-1.csv
+   # .data/agency-2.csv
+   # .data/agency-3.csv
+   ```
+
+2. **Generar docker-compose con múltiples agencias:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+
+3. **Iniciar el sistema completo:**
+   ```bash
+   make docker-compose-up
+   ```
+
+4. **Monitorear el proceso de envío de apuestas:**
+   ```bash
+   # Ver logs de procesamiento de batches
+   make docker-compose-logs | grep "apuesta_recibida"
+   
+   # Ver cuando las agencias terminan de enviar
+   make docker-compose-logs | grep "finished"
+   ```
+
+5. **Verificar el sorteo:**
+   ```bash
+   # Ver log del sorteo (cuando todas las agencias terminaron)
+   make docker-compose-logs | grep "action: sorteo | result: success"
+   ```
+
+6. **Verificar las consultas de ganadores:**
+   ```bash
+   # Ver consultas de ganadores por agencia
+   make docker-compose-logs | grep "consulta_ganadores"
+   
+   # Ejemplo de log esperado:
+   # client1 | action: consulta_ganadores | result: success | cant_ganadores: 2
+   ```
+
+7. **Ejemplo de flujo completo esperado:**
+   ```
+   # 1. Procesamiento de apuestas
+   server   | action: apuesta_recibida | result: success | cantidad: 10
+   client1  | action: batch_processed | result: success | cantidad: 10
+   
+   # 2. Notificación de finalización (cada agencia)
+   server   | Agencia 1 finished sending bets
+   server   | Agencia 2 finished sending bets  
+   server   | Agencia 3 finished sending bets
+   
+   # 3. Sorteo (cuando todas terminaron)
+   server   | action: sorteo | result: success
+   
+   # 4. Consulta de ganadores (cada agencia)
+   client1  | action: consulta_ganadores | result: success | cant_ganadores: 2
+   client2  | action: consulta_ganadores | result: success | cant_ganadores: 1
+   client3  | action: consulta_ganadores | result: success | cant_ganadores: 0
+   ```
+
+8. **Probar diferentes escenarios:**
+   ```bash
+   # Reiniciar para probar con diferentes cantidades de agencias
+   make docker-compose-down
+   ./generar-compose.sh docker-compose-dev.yaml 5
+   make docker-compose-up
+   ```
+
+9. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Características implementadas en el Ejercicio 7:**
+- Notificación de finalización por agencia
+- Sorteo automático cuando todas las agencias terminan
+- Consulta de ganadores específica por agencia
+- Sincronización entre múltiples agencias
+- Logs detallados del flujo completo
+
+**Flujo del Ejercicio 7:**
+1. **Envío de apuestas**: Cada agencia envía sus apuestas en batches
+2. **Notificación**: Cada agencia notifica al servidor cuando termina
+3. **Sorteo**: El servidor realiza el sorteo cuando todas terminan
+4. **Consulta**: Cada agencia consulta sus ganadores específicos
 
 ## Parte 3: Repaso de Concurrencia
 En este ejercicio es importante considerar los mecanismos de sincronización a utilizar para el correcto funcionamiento de la persistencia.
@@ -371,12 +812,10 @@ Se ha implementado el procesamiento por batches (chunks) que permite enviar múl
 ### Formato CSV
 
 ```csv
-Name,Surname,00000000,2000-01-01,7574
-Name,Surname,00000001,2000-01-01,1
-Name,Surname,00000002,2000-01-01,2
+agency,first_name,last_name,document,birthdate,number
+1,Juan,Pérez,12345678,1990-01-01,1234
+1,María,González,23456789,1985-05-15,5678
 ```
-
-**Nota**: El formato CSV de los tests no incluye el campo `agency` explícitamente. El sistema extrae automáticamente el ID de la agencia del nombre del archivo (`agency-N.csv`).
 
 ### Configuración de Batches
 
@@ -395,87 +834,142 @@ batch:
 - **Batch Exitoso**: `action: batch_processed | result: success | cantidad: ${CANTIDAD}`
 - **Batch Fallido**: `action: batch_processed | result: fail | cantidad: ${CANTIDAD}`
 
-## Ejercicio 7: Sorteo y Consulta de Ganadores
+## Protocolo de Comunicación Implementado
 
 ### Descripción General
 
-Se ha implementado el sistema de sorteo y consulta de ganadores por agencia, con soporte dinámico para cualquier cantidad de agencias.
+Se ha implementado un protocolo binario eficiente y robusto que soporta tanto apuestas individuales como batches.
 
 ### Características Principales
 
-- **Sorteo Dinámico**: El servidor espera la notificación de finalización de al menos una agencia
-- **Consulta por Agencia**: Cada agencia puede consultar únicamente sus ganadores
-- **Persistencia**: Las apuestas se almacenan con identificación de agencia
-- **Sincronización**: Control de estado del sorteo con mutexes
+- **Sincronización**: Uso de mutexes para acceso a recursos compartidos
+- **Cierre de FDs**: Manejo graceful de conexiones y recursos
+- **Control de bytes**: Lectura/escritura exacta evitando short-read/short-write
+- **Manejo de errores**: Validación completa de mensajes y conexiones
 
-### Flujo del Sorteo
+### Estructura del Protocolo
 
-1. **Envío de Apuestas**: Los clientes envían apuestas en batches
-2. **Notificación de Finalización**: Cada cliente notifica al servidor cuando termina
-3. **Activación del Sorteo**: El servidor activa el sorteo cuando recibe la primera notificación
-4. **Consulta de Ganadores**: Los clientes consultan sus ganadores específicos
-
-### Protocolo de Notificación y Consulta
-
-#### Notificación de Finalización
-```go
-// Cliente envía notificación
-protocol.SendFinishedNotification(conn, agencyID)
-
-// Servidor responde
-protocol.send_finished_ack(client_sock, success)
+```
+[LONGITUD][TIPO][PAYLOAD][DELIMITADOR]
 ```
 
-#### Consulta de Ganadores
-```go
-// Cliente consulta ganadores
-protocol.SendWinnersQuery(conn, agencyID)
+- **Header (5 bytes)**: 4 bytes longitud (uint32, big-endian) + 1 byte tipo
+- **Payload**: Datos del mensaje (longitud variable)
+- **Delimitador**: 1 byte con valor `0xFF`
 
-// Servidor responde con lista de DNIs ganadores
-protocol.send_winners_response(client_sock, winners)
+### Tipos de Mensaje
+
+| Tipo | Valor | Descripción |
+|------|-------|-------------|
+| MSG_BET | 0x01 | Apuesta individual |
+| MSG_BATCH | 0x02 | Batch de apuestas |
+| MSG_SUCCESS | 0x03 | Respuesta de éxito |
+| MSG_ERROR | 0x04 | Respuesta de error |
+
+### Formato de Datos
+
+#### Codificación de Strings
+Cada string se codifica como `[LONGITUD_STRING][DATOS_STRING]`:
+- **Longitud**: 2 bytes (uint16, big-endian)
+- **Datos**: Bytes UTF-8 del string
+
+#### Apuesta Individual (MSG_BET)
+```
+[NOMBRE_LEN][NOMBRE][APELLIDO_LEN][APELLIDO][DNI_LEN][DNI][NACIMIENTO_LEN][NACIMIENTO][NUMERO_LEN][NUMERO]
 ```
 
-### Manejo de Agencias
-
-#### Extracción Automática de Agency ID
-```go
-func extractAgencyID(filename string) string {
-    // Extrae el ID de la agencia del nombre del archivo agency-N.csv
-    parts := strings.Split(filename, "/")
-    if len(parts) > 0 {
-        lastPart := parts[len(parts)-1]
-        if strings.HasPrefix(lastPart, "agency-") && strings.HasSuffix(lastPart, ".csv") {
-            agencyID := strings.TrimPrefix(lastPart, "agency-")
-            agencyID = strings.TrimSuffix(agencyID, ".csv")
-            return agencyID
-        }
-    }
-    return "1" // Por defecto
-}
+#### Respuesta (MSG_SUCCESS/MSG_ERROR)
+```
+[DNI_LEN][DNI][NUMERO_LEN][NUMERO]
 ```
 
-#### Almacenamiento con Agency
+### Manejo de Errores
+
+#### Validaciones Implementadas
+1. **Longitud de mensaje**: Máximo 8KB
+2. **Delimitador**: Verificación del byte delimitador
+3. **Datos completos**: Lectura/escritura exacta de bytes
+4. **Tipos de mensaje**: Validación de tipos válidos
+5. **Strings**: Verificación de longitud y codificación UTF-8
+
+#### Códigos de Error
+- Conexión cerrada inesperadamente
+- Mensaje demasiado grande
+- Delimitador inválido
+- Payload incompleto
+- Tipo de mensaje desconocido
+- Error de codificación/decodificación
+
+### Configuración
+
+El protocolo está configurado para:
+- **Puerto**: 12345 (configurable)
+- **Tamaño máximo**: 8KB por mensaje
+- **Timeout**: Sin timeout específico (usa configuración del socket)
+- **Codificación**: UTF-8 para strings
+
+## Estructura del Protocolo
+
+**Formato de Mensaje:**
+```
+[LONGITUD][TIPO][PAYLOAD][DELIMITADOR]
+```
+
+Donde:
+- `[LONGITUD]`: 4 bytes (uint32) en big-endian indicando la longitud del payload
+- `[TIPO]`: 1 byte indicando el tipo de mensaje
+- `[PAYLOAD]`: Datos del mensaje (longitud variable)
+- `[DELIMITADOR]`: 1 byte con valor `0xFF`
+
+**Tipos de Mensaje:**
+- `0x01`: Apuesta individual
+- `0x02`: Batch de apuestas
+- `0x03`: Respuesta de éxito
+- `0x04`: Respuesta de error
+
+## Formato del Payload
+
+**Apuesta Individual (Tipo 0x01):**
+```
+[NOMBRE_LEN][NOMBRE][APELLIDO_LEN][APELLIDO][DNI_LEN][DNI][NACIMIENTO_LEN][NACIMIENTO][NUMERO_LEN][NUMERO]
+```
+
+**Batch de Apuestas (Tipo 0x02):**
+```
+[CANTIDAD_APUESTAS][LONGITUD_APUESTA_1][APUESTA_1][LONGITUD_APUESTA_2][APUESTA_2]...[LONGITUD_APUESTA_N][APUESTA_N]
+```
+
+Donde:
+- `[CANTIDAD_APUESTAS]`: 4 bytes (uint32) en big-endian indicando el número de apuestas
+- `[LONGITUD_APUESTA_X]`: 4 bytes (uint32) en big-endian indicando la longitud de cada apuesta
+- `[APUESTA_X]`: Datos de la apuesta individual en formato estándar
+
+**Respuesta (Tipos 0x03, 0x04):**
+```
+[DNI_LEN][DNI][NUMERO_LEN][NUMERO]
+```
+
+## Implementación del Protocolo
+
+### Constantes del Protocolo
+
 ```python
-# Servidor almacena apuestas con agency
-def store_bets(bets: list[Bet]) -> None:
-    with open(STORAGE_FILEPATH, 'a+') as file:
-        writer = csv.writer(file, quoting=csv.QUOTE_MINIMAL)
-        for bet in bets:
-            writer.writerow([bet.agency, bet.first_name, bet.last_name,
-                            bet.document, bet.birthdate, bet.number])
+# Python
+DELIMITER = b'\xFF'
+HEADER_SIZE = 5  # 4 bytes longitud + 1 byte tipo
+MAX_MESSAGE_SIZE = 8192  # 8KB máximo
 ```
 
-#### Consulta de Ganadores por Agencia
-```python
-def _get_winners_for_agency(self, agency_id: str) -> list[str]:
-    winners = []
-    for bet in load_bets():
-        if str(bet.agency) == agency_id and has_won(bet):
-            winners.append(bet.document)
-    return winners
+```go
+// Go
+const (
+    DELIMITER        = 0xFF
+    HEADER_SIZE      = 5 // 4 bytes longitud + 1 byte tipo
+    MAX_MESSAGE_SIZE = 8192 // 8KB máximo
+)
 ```
 
-### Funciones Principales del Protocolo
+### Funciones Principales
 
 #### Envío de Mensajes
 ```python
@@ -613,16 +1107,16 @@ func (p *Protocol) DecodeBatch(payload []byte) ([]Bet, error) {
 }
 ```
 
-### Manejo de Errores
+## Manejo de Errores
 
-#### Validaciones Implementadas
+### Validaciones Implementadas
 1. **Longitud de mensaje**: Máximo 8KB para evitar ataques DoS
 2. **Delimitador**: Verificación del byte delimitador
 3. **Datos completos**: Lectura/escritura exacta de bytes
 4. **Tipos de mensaje**: Validación de tipos válidos
 5. **Strings**: Verificación de longitud y codificación UTF-8
 
-#### Códigos de Error
+### Códigos de Error
 - Conexión cerrada inesperadamente
 - Mensaje demasiado grande
 - Delimitador inválido
@@ -630,7 +1124,78 @@ func (p *Protocol) DecodeBatch(payload []byte) ([]Bet, error) {
 - Tipo de mensaje desconocido
 - Error de codificación/decodificación
 
-### Configuración del Protocolo
+## Ejemplo de Uso
+
+### Cliente (Go) - Apuesta Individual
+```go
+protocol := NewProtocol()
+bet := Bet{Nombre: "Juan", Apellido: "Pérez", DNI: "12345678", ...}
+
+// Enviar apuesta individual
+err := protocol.SendBet(conn, bet)
+
+// Recibir respuesta
+success, dni, numero, err := protocol.ReceiveResponse(conn)
+```
+
+### Cliente (Go) - Procesamiento por Batches
+```go
+protocol := NewProtocol()
+batchProcessor := NewBatchProcessor(protocol, maxBatchSize)
+
+// Leer apuestas desde CSV
+bets, err := batchProcessor.ReadBetsFromCSV("/data/agency-1.csv")
+
+// Procesar en batches
+for i := 0; i < len(bets); i += maxBatchSize {
+    end := min(i+maxBatchSize, len(bets))
+    batch := bets[i:end]
+    
+    // Enviar batch
+    err := protocol.SendBatch(conn, batch)
+    
+    // Recibir respuesta
+    success, _, _, err := protocol.ReceiveResponse(conn)
+}
+```
+
+### Servidor (Python) - Procesamiento Mixto
+```python
+protocol = Protocol()
+
+# Procesar mensaje (apuesta individual o batch)
+success = protocol.process_message(client_sock)
+
+# El servidor detecta automáticamente el tipo de mensaje:
+# - MSG_BET (0x01): Procesa apuesta individual
+# - MSG_BATCH (0x02): Procesa batch de apuestas
+```
+
+### Servidor (Python) - Procesamiento de Batch
+```python
+# Recibir batch
+bets = protocol.receive_batch(client_sock)
+
+# Procesar todas las apuestas
+success = True
+try:
+    store_bets(bets)
+    for bet in bets:
+        logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document}")
+except Exception as e:
+    success = False
+
+# Log del resultado del batch
+if success:
+    logging.info(f"action: apuesta_recibida | result: success | cantidad: {len(bets)}")
+else:
+    logging.error(f"action: apuesta_recibida | result: fail | cantidad: {len(bets)}")
+
+# Enviar respuesta
+protocol.send_response(client_sock, success, bets[0].document, str(bets[0].number))
+```
+
+## Configuración
 
 El protocolo está configurado para:
 - **Puerto**: 12345 (configurable)
@@ -638,38 +1203,40 @@ El protocolo está configurado para:
 - **Timeout**: Sin timeout específico (usa configuración del socket)
 - **Codificación**: UTF-8 para strings
 
-#### Configuración de Batches
+### Configuración de Batches
 
 ```yaml
 batch:
   maxAmount: 50  # Máximo 50 apuestas por batch (ajustado para < 8KB)
 ```
 
-#### Estructura del Batch
+### Estructura de Archivos CSV
+
 ```
-[CANTIDAD][LEN_APUESTA_1][APUESTA_1][LEN_APUESTA_2][APUESTA_2]...[LEN_APUESTA_N][APUESTA_N]
+.data/
+├── agency-1.csv    # Apuestas de la agencia 1
+├── agency-2.csv    # Apuestas de la agencia 2
+└── agency-N.csv    # Apuestas de la agencia N
 ```
 
-#### Flujo de Procesamiento
-1. **Cliente**: Lee apuestas desde archivo CSV
-2. **Cliente**: Agrupa apuestas en batches según `maxAmount`
-3. **Cliente**: Envía batch completo al servidor
-4. **Servidor**: Recibe y decodifica el batch
-5. **Servidor**: Procesa cada apuesta individualmente
-6. **Servidor**: Responde con éxito solo si todas las apuestas se procesaron correctamente
-7. **Cliente**: Recibe confirmación del batch completo
+**Formato CSV:**
+```csv
+agency,first_name,last_name,document,birthdate,number
+1,Juan,Pérez,12345678,1990-01-01,1234
+1,María,González,23456789,1985-05-15,5678
+```
 
-#### Manejo de Errores en Batches
-- Si una apuesta falla, todo el batch se marca como fallido
-- El servidor responde con `MSG_ERROR` para batches fallidos
-- Los logs indican la cantidad total de apuestas procesadas
-- Se mantiene la atomicidad del batch
-
-### Logs del Protocolo
+## Logs del Protocolo
 
 El protocolo genera logs detallados para debugging:
 
-#### Logs de Batches
+### Logs de Apuestas Individuales
+- Recepción/envío de mensajes
+- Errores de validación
+- Problemas de conexión
+- Confirmaciones de operaciones
+
+### Logs de Batches
 
 **Cliente:**
 ```
@@ -686,11 +1253,33 @@ action: apuesta_almacenada | result: success | dni: 23456789 | numero: 5678
 action: apuesta_recibida | result: success | cantidad: 10
 ```
 
-#### Logs de Error en Batches
+### Logs de Error en Batches
 ```
 action: apuesta_recibida | result: fail | cantidad: 10
 action: batch_processed | result: fail | client_id: 1 | batch: 1-10 | cantidad: 10
 ```
+
+### Implementación de Batches
+
+#### Estructura del Batch
+```
+[CANTIDAD][LEN_APUESTA_1][APUESTA_1][LEN_APUESTA_2][APUESTA_2]...[LEN_APUESTA_N][APUESTA_N]
+```
+
+#### Flujo de Procesamiento
+1. **Cliente**: Lee apuestas desde archivo CSV
+2. **Cliente**: Agrupa apuestas en batches según `maxAmount`
+3. **Cliente**: Envía batch completo al servidor
+4. **Servidor**: Recibe y decodifica el batch
+5. **Servidor**: Almacena todas las apuestas del batch usando `store_bets(bets)`
+6. **Servidor**: Responde con éxito solo si todas las apuestas se procesaron correctamente
+7. **Cliente**: Recibe confirmación del batch completo
+
+#### Manejo de Errores en Batches
+- Si una apuesta falla, todo el batch se marca como fallido
+- El servidor responde con `MSG_ERROR` para batches fallidos
+- Los logs indican la cantidad total de apuestas procesadas
+- Se mantiene la atomicidad del batch
 
 ### Configuración de Volúmenes Docker
 
@@ -704,199 +1293,6 @@ Los archivos CSV se montan como volúmenes de solo lectura para:
 - Fácil actualización de datos sin reconstruir imágenes
 - Separación de datos de la lógica de aplicación
 
-## Protocolo de Comunicación Implementado
-
-### Descripción General
-
-Se ha implementado un protocolo binario eficiente y robusto que soporta tanto apuestas individuales como batches, con soporte completo para identificación de agencias.
-
-### Características Principales
-
-- **Sincronización**: Uso de mutexes para acceso a recursos compartidos
-- **Cierre de FDs**: Manejo graceful de conexiones y recursos
-- **Control de bytes**: Lectura/escritura exacta evitando short-read/short-write
-- **Manejo de errores**: Validación completa de mensajes y conexiones
-- **Identificación de Agencias**: Soporte completo para múltiples agencias con tracking individual
-
-### Estructura del Protocolo
-
-**Formato de Mensaje:**
-```
-[LONGITUD][TIPO][PAYLOAD][DELIMITADOR]
-```
-
-Donde:
-- `[LONGITUD]`: 4 bytes (uint32) en big-endian indicando la longitud del payload
-- `[TIPO]`: 1 byte indicando el tipo de mensaje
-- `[PAYLOAD]`: Datos del mensaje (longitud variable)
-- `[DELIMITADOR]`: 1 byte con valor `0xFF`
-
-**Tipos de Mensaje:**
-- `0x01`: Apuesta individual (MSG_BET)
-- `0x02`: Batch de apuestas (MSG_BATCH)
-- `0x03`: Respuesta de éxito (MSG_SUCCESS)
-- `0x04`: Respuesta de error (MSG_ERROR)
-- `0x05`: Notificación de finalización (MSG_FINISHED)
-- `0x06`: Consulta de ganadores (MSG_WINNERS_QUERY)
-- `0x07`: Respuesta con ganadores (MSG_WINNERS_RESPONSE)
-
-### Constantes del Protocolo
-
-```python
-# Python
-DELIMITER = b'\xFF'
-HEADER_SIZE = 5  # 4 bytes longitud + 1 byte tipo
-MAX_MESSAGE_SIZE = 8192  # 8KB máximo
-```
-
-```go
-// Go
-const (
-    DELIMITER        = 0xFF
-    HEADER_SIZE      = 5 // 4 bytes longitud + 1 byte tipo
-    MAX_MESSAGE_SIZE = 8192 // 8KB máximo
-)
-```
-
-### Formato del Payload
-
-**Apuesta Individual (Tipo 0x01):**
-```
-[AGENCY_LEN][AGENCY][NOMBRE_LEN][NOMBRE][APELLIDO_LEN][APELLIDO][DNI_LEN][DNI][NACIMIENTO_LEN][NACIMIENTO][NUMERO_LEN][NUMERO]
-```
-
-**Batch de Apuestas (Tipo 0x02):**
-```
-[CANTIDAD_APUESTAS][LONGITUD_APUESTA_1][APUESTA_1][LONGITUD_APUESTA_2][APUESTA_2]...[LONGITUD_APUESTA_N][APUESTA_N]
-```
-
-Donde:
-- `[CANTIDAD_APUESTAS]`: 4 bytes (uint32) en big-endian indicando el número de apuestas
-- `[LONGITUD_APUESTA_X]`: 4 bytes (uint32) en big-endian indicando la longitud de cada apuesta
-- `[APUESTA_X]`: Datos de la apuesta individual en formato estándar
-
-**Respuesta (Tipos 0x03, 0x04):**
-```
-[DNI_LEN][DNI][NUMERO_LEN][NUMERO]
-```
-
-**Notificación de Finalización (Tipo 0x05):**
-```
-[AGENCY_ID_LEN][AGENCY_ID]
-```
-
-**Consulta de Ganadores (Tipo 0x06):**
-```
-[AGENCY_ID_LEN][AGENCY_ID]
-```
-
-**Respuesta con Ganadores (Tipo 0x07):**
-```
-[CANTIDAD_GANADORES][DNI_1_LEN][DNI_1][DNI_2_LEN][DNI_2]...[DNI_N_LEN][DNI_N]
-```
-
-### Estructura de Datos
-
-#### Estructura de Apuesta (Actualizada)
-
-```go
-type Bet struct {
-    Agency     string  
-    Nombre     string
-    Apellido   string
-    DNI        string
-    Nacimiento string
-    Numero     string
-}
-```
-
-#### Codificación de Apuesta
-
-```go
-// Cliente (Go)
-func (p *Protocol) EncodeBet(bet Bet) []byte {
-    payload := make([]byte, 0)
-    payload = append(payload, p.encodeString(bet.Agency)...)  
-    payload = append(payload, p.encodeString(bet.Nombre)...)
-    payload = append(payload, p.encodeString(bet.Apellido)...)
-    payload = append(payload, p.encodeString(bet.DNI)...)
-    payload = append(payload, p.encodeString(bet.Nacimiento)...)
-    payload = append(payload, p.encodeString(bet.Numero)...)
-    return payload
-}
-```
-
-```python
-# Servidor (Python)
-def encode_bet(self, bet: Bet) -> bytes:
-    payload = b""
-    payload += self._encode_string(str(bet.agency)) 
-    payload += self._encode_string(bet.first_name)
-    payload += self._encode_string(bet.last_name)
-    payload += self._encode_string(bet.document)
-    payload += self._encode_string(bet.birthdate.isoformat())
-    payload += self._encode_string(str(bet.number))
-    return payload
-```
-
-```
-[LONGITUD][TIPO][PAYLOAD][DELIMITADOR]
-```
-
-- **Header (5 bytes)**: 4 bytes longitud (uint32, big-endian) + 1 byte tipo
-- **Payload**: Datos del mensaje (longitud variable)
-- **Delimitador**: 1 byte con valor `0xFF`
-
-### Tipos de Mensaje
-
-| Tipo | Valor | Descripción |
-|------|-------|-------------|
-| MSG_BET | 0x01 | Apuesta individual |
-| MSG_BATCH | 0x02 | Batch de apuestas |
-| MSG_SUCCESS | 0x03 | Respuesta de éxito |
-| MSG_ERROR | 0x04 | Respuesta de error |
-
-### Formato de Datos
-
-#### Codificación de Strings
-Cada string se codifica como `[LONGITUD_STRING][DATOS_STRING]`:
-- **Longitud**: 2 bytes (uint16, big-endian)
-- **Datos**: Bytes UTF-8 del string
-
-#### Apuesta Individual (MSG_BET)
-```
-[NOMBRE_LEN][NOMBRE][APELLIDO_LEN][APELLIDO][DNI_LEN][DNI][NACIMIENTO_LEN][NACIMIENTO][NUMERO_LEN][NUMERO]
-```
-
-#### Respuesta (MSG_SUCCESS/MSG_ERROR)
-```
-[DNI_LEN][DNI][NUMERO_LEN][NUMERO]
-```
-
-### Manejo de Errores
-
-#### Validaciones Implementadas
-1. **Longitud de mensaje**: Máximo 8KB
-2. **Delimitador**: Verificación del byte delimitador
-3. **Datos completos**: Lectura/escritura exacta de bytes
-4. **Tipos de mensaje**: Validación de tipos válidos
-5. **Strings**: Verificación de longitud y codificación UTF-8
-
-#### Códigos de Error
-- Conexión cerrada inesperadamente
-- Mensaje demasiado grande
-- Delimitador inválido
-- Payload incompleto
-- Tipo de mensaje desconocido
-- Error de codificación/decodificación
-
-### Configuración
-
-El protocolo está configurado para:
-- **Puerto**: 12345 (configurable)
-- **Tamaño máximo**: 8KB por mensaje
-- **Timeout**: Sin timeout específico (usa configuración del socket)
-- **Codificación**: UTF-8 para strings
 
 ## Mecanismos de Sincronización
 
@@ -904,223 +1300,8 @@ El protocolo está configurado para:
 - **Mutex**: Protege acceso a la conexión del socket
 - **Context**: Manejo de cancelación graceful
 - **Signal handlers**: Captura de SIGTERM/SIGINT
-- **Retry automático**: Sistema de reintentos para consulta de ganadores
 
 ### Servidor (Python)
 - **Threading**: Preparado para múltiples conexiones concurrentes
 - **Locks**: Protección de recursos compartidos
 - **Graceful shutdown**: Cierre ordenado de conexiones
-- **Estado compartido**: Control de agencias finalizadas y estado del sorteo
-
-## Mecanismo de Retry
-
-### Cliente - Consulta de Ganadores con Retry
-
-El cliente implementa un sistema robusto de reintentos automáticos para la consulta de ganadores:
-
-```go
-func (c *Client) queryWinnersWithRetry() ([]string, error) {
-    maxRetries := 300
-    retryDelay := time.Second * 2
-    
-    for attempt := 1; attempt <= maxRetries; attempt++ {
-        // Crear nueva conexión para cada intento
-        if err := c.createClientSocket(); err != nil {
-            return nil, err
-        }
-        
-        // Consultar ganadores
-        if err := c.protocol.SendWinnersQuery(c.conn, c.config.ID); err != nil {
-            c.closeClientSocket()
-            return nil, err
-        }
-        
-        // Recibir respuesta
-        msgType, _, err := c.protocol.ReceiveMessage(c.conn)
-        c.closeClientSocket()
-        
-        switch msgType {
-        case MSG_WINNERS_RESPONSE:
-            // Procesar ganadores y retornar
-            return winners, nil
-            
-        case MSG_RETRY:
-            // El servidor indica que debe esperar
-            if attempt < maxRetries {
-                time.Sleep(retryDelay)
-                continue
-            }
-        }
-    }
-    
-    return nil, fmt.Errorf("máximo número de reintentos alcanzado")
-}
-```
-
-**Características del retry:**
-- **Máximo 300 intentos** con delay de 2 segundos entre intentos
-- **Nueva conexión por intento** para evitar problemas de socket
-- **Manejo de mensaje MSG_RETRY** del servidor
-- **Logs detallados** de cada intento y resultado
-
-### Servidor - Respuesta de Retry
-
-El servidor responde con `MSG_RETRY` cuando el sorteo aún no está completo:
-
-```python
-def send_retry_response(self, client_sock: socket.socket, message: str = "Lottery not completed yet") -> bool:
-    """
-    Envía respuesta de retry al cliente indicando que debe esperar
-    """
-    payload = self._encode_string(message)
-    return self.send_message(client_sock, self.MSG_RETRY, payload)
-```
-
-**Lógica del servidor:**
-- Verifica si todas las agencias han finalizado (`len(self._finished_agencies) >= self._expected_agencies`)
-- Si no están todas finalizadas, envía `MSG_RETRY` con mensaje informativo
-- Si están todas finalizadas, procesa y envía los ganadores
-
-## Uso de Locks en Servidor No Concurrente
-
-Aunque el servidor actual no implementa concurrencia (una conexión por vez), se utilizan locks por las siguientes razones:
-
-### 1. **Preparación para Concurrencia Futura**
-```python
-# Locks preparados para cuando se implemente threading
-self._connections_lock = threading.Lock()  # Para lista de conexiones activas
-self._threads_lock = threading.Lock()      # Para pool de threads
-self._storage_lock = threading.Lock()      # Para operaciones de persistencia
-self._state_lock = threading.Lock()        # Para estado del sorteo
-```
-
-### 2. **Protección de Estado Compartido**
-```python
-def _mark_agency_finished(self, agency_id: str):
-    """Marca una agencia como finalizada y verifica si todas terminaron"""
-    with self._state_lock:
-        self._finished_agencies.add(agency_id)
-        logging.info(f'action: agency_finished | result: success | agency: {agency_id}')
-```
-
-### 3. **Operaciones de Persistencia**
-```python
-# Las funciones de la cátedra (store_bets, load_bets, has_won) 
-# pueden no ser thread-safe, por lo que se protegen con locks
-with self._storage_lock:
-    store_bets([bet])
-```
-
-### 4. **Graceful Shutdown Thread-Safe**
-```python
-def _graceful_shutdown(self):
-    """Perform graceful shutdown of all resources"""
-    with self._connections_lock:
-        for client_sock in self._active_connections:
-            try:
-                client_sock.close()
-            except Exception as e:
-                logging.error(f'action: close_client_connection | result: fail | error: {e}')
-```
-
-### 5. **Detección Automática de Agencias**
-```python
-def _detect_expected_agencies(self) -> int:
-    """Detecta automáticamente cuántas agencias se esperan"""
-    try:
-        # Usar variable de entorno EXPECTED_AGENCIES
-        env_count = os.environ.get('EXPECTED_AGENCIES')
-        if env_count:
-            return int(env_count)
-        
-        # Fallback: detectar archivos CSV disponibles
-        data_dir = os.path.join(os.path.dirname(__file__), '..', '..', '.data')
-        if os.path.exists(data_dir):
-            csv_files = [f for f in os.listdir(data_dir) if f.startswith('agency-') and f.endswith('.csv')]
-            return len(csv_files)
-        
-        return 5  # Valor por defecto
-    except Exception:
-        return 5  # Valor por defecto en caso de error
-```
-
-## Graceful Shutdown Mejorado
-
-### Cliente (Go)
-```go
-func (c *Client) setupSignalHandlers() {
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-    
-    go func() {
-        sig := <-sigChan
-        log.Infof("action: signal_received | result: success | signal: %v", sig)
-        c.gracefulShutdown()
-        os.Exit(0)
-    }()
-}
-
-func (c *Client) gracefulShutdown() {
-    log.Info("action: graceful_shutdown | result: in_progress")
-    
-    // Cancelar contexto para interrumpir loops
-    c.cancel()
-    
-    // Cerrar conexión si está abierta
-    if c.conn != nil {
-        c.conn.Close()
-        log.Info("action: close_connection | result: success")
-    }
-    
-    log.Info("action: graceful_shutdown | result: success")
-}
-```
-
-### Servidor (Python)
-```python
-def _signal_handler(self, signum, frame):
-    """Handle shutdown signals gracefully"""
-    logging.info(f'action: signal_received | result: success | signal: {signum}')
-    self._shutdown_requested = True
-    self._graceful_shutdown()
-    sys.exit(0)
-
-def _graceful_shutdown(self):
-    """Perform graceful shutdown of all resources"""
-    logging.info('action: graceful_shutdown | result: in_progress')
-    
-    # Close all active client connections
-    with self._connections_lock:
-        for client_sock in self._active_connections:
-            try:
-                client_sock.close()
-                logging.info('action: close_client_connection | result: success')
-            except Exception as e:
-                logging.error(f'action: close_client_connection | result: fail | error: {e}')
-    
-    # Close server socket
-    try:
-        self._server_socket.close()
-        logging.info('action: close_server_socket | result: success')
-    except Exception as e:
-        logging.error(f'action: close_server_socket | result: fail | error: {e}')
-    
-    logging.info('action: graceful_shutdown | result: success')
-```
-
-## Logs de Retry y Sincronización
-
-### Logs del Cliente
-```
-action: retry_message | result: success | client_id: 1 | attempt: 1 | message: Lottery not completed yet. 2/5 agencies finished.
-action: retry_wait | result: in_progress | client_id: 1 | attempt: 1/300 | delay: 2s
-action: consulta_ganadores | result: success | cant_ganadores: 3
-```
-
-### Logs del Servidor
-```
-action: sorteo | result: in_progress | agencies_finished: 2/5
-action: sorteo | result: success
-action: agency_finished | result: success | agency: 1
-action: agency_finished | result: success | agency: 2
-```
