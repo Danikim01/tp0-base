@@ -33,6 +33,7 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
+      - EXPECTED_AGENCIES=$CANTIDAD_CLIENTES
     volumes:
       - ./server/config.ini:/config.ini:ro
       - ./.data:/data:ro

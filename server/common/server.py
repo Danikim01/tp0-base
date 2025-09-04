@@ -45,23 +45,23 @@ class Server:
         signal.signal(signal.SIGINT, self._signal_handler)
 
     def _detect_expected_agencies(self) -> int:
-        """Detecta automáticamente cuántas agencias se esperan"""
+        """Detecta automáticamente cuántas agencias se esperan usando variables de entorno"""
         try:
-            # Buscar archivos agency-*.csv en .data
-            data_dir = ".data" if os.path.exists(".data") else "/data"
-            agency_files = glob.glob(os.path.join(data_dir, "agency-*.csv"))
-            
-            if agency_files:
-                # Contar archivos de agencias
-                expected_count = len(agency_files)
+            # Usar variable de entorno EXPECTED_AGENCIES
+            env_count = os.environ.get('EXPECTED_AGENCIES')
+            if env_count:
+                expected_count = int(env_count)
+                logging.info(f'action: detect_agencies | result: success | method: environment | count: {expected_count}')
                 return expected_count
-            else:
-                # Fallback: 1 agencia por defecto
-                return 1
+            
+            # Fallback: 3 agencias por defecto
+            default_count = 3
+            logging.info(f'action: detect_agencies | result: success | method: default | count: {default_count}')
+            return default_count
                 
         except Exception as e:
-            logging.error(f'action: detect_agencies | result: fail | error: {e} | using_default: 1')
-            return 1
+            logging.error(f'action: detect_agencies | result: fail | error: {e} | using_default: 3')
+            return 3
 
     def _signal_handler(self, signum, frame):
         """Handle SIGTERM and SIGINT signals for graceful shutdown"""
