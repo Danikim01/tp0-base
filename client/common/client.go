@@ -228,7 +228,7 @@ func (c *Client) StartClientLoop(bet Bet) {
 
 // queryWinnersWithRetry consulta los ganadores con reintentos automáticos
 func (c *Client) queryWinnersWithRetry() ([]string, error) {
-	maxRetries := 10
+	maxRetries := 300
 	retryDelay := time.Second * 2
 	
 	for attempt := 1; attempt <= maxRetries; attempt++ {
