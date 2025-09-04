@@ -93,6 +93,49 @@ python3 mi-generador.py $1 $2
 
 En el archivo de Docker Compose de salida se pueden definir volúmenes, variables de entorno y redes con libertad, pero recordar actualizar este script cuando se modifiquen tales definiciones en los sucesivos ejercicios.
 
+#### Cómo ejecutar el Ejercicio 1:
+
+1. **Generar el archivo docker-compose con una cantidad específica de clientes:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+   Este comando generará un archivo `docker-compose-dev.yaml` con 3 clientes (client1, client2, client3).
+
+2. **Verificar el archivo generado:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+
+3. **Ejecutar el sistema con los clientes generados:**
+   ```bash
+   make docker-compose-up
+   ```
+
+4. **Ver los logs de todos los clientes:**
+   ```bash
+   make docker-compose-logs
+   ```
+
+5. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Ejemplo de uso:**
+```bash
+# Generar compose con 5 clientes
+./generar-compose.sh docker-compose-dev.yaml 5
+
+# Iniciar el sistema
+make docker-compose-up
+
+# Ver logs específicos de un cliente
+make docker-compose-logs | grep client3
+
+# Detener el sistema
+make docker-compose-down
+```
+
 ### Ejercicio N°2:
 Modificar el cliente y el servidor para lograr que realizar cambios en el archivo de configuración no requiera reconstruír las imágenes de Docker para que los mismos sean efectivos. La configuración a través del archivo correspondiente (`config.ini` y `config.yaml`, dependiendo de la aplicación) debe ser inyectada en el container y persistida por fuera de la imagen (hint: `docker volumes`).
 
