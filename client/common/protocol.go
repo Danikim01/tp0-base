@@ -22,6 +22,7 @@ const (
 	MSG_FINISHED        = 0x05
 	MSG_WINNERS_QUERY   = 0x06
 	MSG_WINNERS_RESPONSE = 0x07
+	MSG_RETRY           = 0x08
 )
 
 // Bet representa una apuesta de quiniela
@@ -298,6 +299,27 @@ func (p *Protocol) ReceiveWinnersResponse(conn net.Conn) (bool, []string, error)
 	}
 	
 	return true, ganadores, nil
+}
+
+// ReceiveRetryResponse recibe la respuesta de retry del servidor
+func (p *Protocol) ReceiveRetryResponse(conn net.Conn) (string, error) {
+	msgType, payload, err := p.ReceiveMessage(conn)
+	if err != nil {
+		return "", fmt.Errorf("error recibiendo respuesta de retry: %v", err)
+	}
+	
+	if msgType != MSG_RETRY {
+		return "", fmt.Errorf("tipo de mensaje inesperado: %d", msgType)
+	}
+	
+	// Decodificar mensaje de retry
+	offset := 0
+	message, _, err := p.decodeString(payload, offset)
+	if err != nil {
+		return "", fmt.Errorf("error decodificando mensaje de retry: %v", err)
+	}
+	
+	return message, nil
 }
 
 // ReceiveResponse recibe la respuesta del servidor

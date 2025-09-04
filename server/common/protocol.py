@@ -16,6 +16,7 @@ class Protocol:
     MSG_FINISHED = 0x05
     MSG_WINNERS_QUERY = 0x06
     MSG_WINNERS_RESPONSE = 0x07
+    MSG_RETRY = 0x08 # Nuevo tipo de mensaje para retry
 
     def __init__(self):
         pass
@@ -436,6 +437,13 @@ class Protocol:
             payload += self._encode_string(winner)
         
         return self.send_message(client_sock, self.MSG_WINNERS_RESPONSE, payload)
+    
+    def send_retry_response(self, client_sock: socket.socket, message: str = "Lottery not completed yet") -> bool:
+        """
+        Envía respuesta de retry al cliente indicando que debe esperar
+        """
+        payload = self._encode_string(message)
+        return self.send_message(client_sock, self.MSG_RETRY, payload)
     
     def process_bet(self, client_sock: socket.socket) -> bool:
         """

@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -214,28 +215,133 @@ func (c *Client) StartClientLoop(bet Bet) {
 		return
 	}
 	
-	// Consultar ganadores de la agencia
-	if err := c.protocol.SendWinnersQuery(c.conn, c.config.ID); err != nil {
-		log.Errorf("action: send_winners_query | result: fail | client_id: %v | error: %v",
-			c.config.ID, err,
-		)
-		return
-	}
-	
-	// Recibir respuesta con ganadores
-	success, ganadores, err := c.protocol.ReceiveWinnersResponse(c.conn)
+	// Consultar ganadores de la agencia con retry automático
+	ganadores, err := c.queryWinnersWithRetry()
 	if err != nil {
-		log.Errorf("action: receive_winners_response | result: fail | client_id: %v | error: %v",
-			c.config.ID, err,
-		)
+		log.Errorf("action: consulta_ganadores | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
 		return
 	}
 	
-	if success {
-		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(ganadores))
-	} else {
-		log.Errorf("action: consulta_ganadores | result: fail")
+	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(ganadores))
+}
+
+// queryWinnersWithRetry consulta los ganadores con reintentos automáticos
+func (c *Client) queryWinnersWithRetry() ([]string, error) {
+	maxRetries := 10
+	retryDelay := time.Second * 2
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Crear nueva conexión para cada intento
+		if err := c.createClientSocket(); err != nil {
+			log.Errorf("action: create_socket_for_winners | result: fail | client_id: %v | attempt: %d | error: %v",
+				c.config.ID, attempt, err)
+			return nil, err
+		}
+		
+		// Consultar ganadores
+		if err := c.protocol.SendWinnersQuery(c.conn, c.config.ID); err != nil {
+			log.Errorf("action: send_winners_query | result: fail | client_id: %v | attempt: %d | error: %v",
+				c.config.ID, attempt, err)
+			c.closeClientSocket()
+			return nil, err
+		}
+		
+		// Recibir respuesta
+		msgType, _, err := c.protocol.ReceiveMessage(c.conn)
+		if err != nil {
+			log.Errorf("action: receive_winners_response | result: fail | client_id: %v | attempt: %d | error: %v",
+				c.config.ID, attempt, err)
+			c.closeClientSocket()
+			return nil, err
+		}
+		
+		c.closeClientSocket()
+		
+		// Procesar respuesta según el tipo
+		switch msgType {
+		case MSG_WINNERS_RESPONSE:
+			// Recrear conexión para recibir el payload completo
+			if err := c.createClientSocket(); err != nil {
+				log.Errorf("action: create_socket_for_winners_payload | result: fail | client_id: %v | error: %v",
+					c.config.ID, err)
+				return nil, err
+			}
+			
+			// Enviar consulta nuevamente para recibir el payload
+			if err := c.protocol.SendWinnersQuery(c.conn, c.config.ID); err != nil {
+				log.Errorf("action: send_winners_query_payload | result: fail | client_id: %v | error: %v",
+					c.config.ID, err)
+				c.closeClientSocket()
+				return nil, err
+			}
+			
+			// Recibir respuesta completa
+			success, ganadores, err := c.protocol.ReceiveWinnersResponse(c.conn)
+			c.closeClientSocket()
+			
+			if err != nil {
+				log.Errorf("action: receive_winners_payload | result: fail | client_id: %v | error: %v",
+					c.config.ID, err)
+				return nil, err
+			}
+			
+			if success {
+				log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d | attempts: %d", 
+					len(ganadores), attempt)
+				return ganadores, nil
+			} else {
+				log.Errorf("action: consulta_ganadores | result: fail | attempt: %d", attempt)
+				return nil, fmt.Errorf("consulta de ganadores falló")
+			}
+			
+		case MSG_RETRY:
+			// Recrear conexión para recibir el payload del mensaje de retry
+			if err := c.createClientSocket(); err != nil {
+				log.Errorf("action: create_socket_for_retry | result: fail | client_id: %v | error: %v",
+					c.config.ID, err)
+				return nil, err
+			}
+			
+			// Enviar consulta nuevamente para recibir el payload
+			if err := c.protocol.SendWinnersQuery(c.conn, c.config.ID); err != nil {
+				log.Errorf("action: send_winners_query_retry | result: fail | client_id: %v | error: %v",
+					c.config.ID, err)
+				c.closeClientSocket()
+				return nil, err
+			}
+			
+			// Recibir mensaje de retry completo
+			retryMessage, err := c.protocol.ReceiveRetryResponse(c.conn)
+			c.closeClientSocket()
+			
+			if err != nil {
+				log.Errorf("action: receive_retry_message | result: fail | client_id: %v | error: %v",
+					c.config.ID, err)
+				return nil, err
+			}
+			
+			log.Infof("action: retry_message | result: received | client_id: %v | attempt: %d | message: %s",
+				c.config.ID, attempt, retryMessage)
+			
+			// Si no es el último intento, esperar y reintentar
+			if attempt < maxRetries {
+				log.Infof("action: retry_wait | result: waiting | client_id: %v | attempt: %d/%d | delay: %v",
+					c.config.ID, attempt, maxRetries, retryDelay)
+				time.Sleep(retryDelay)
+				continue
+			} else {
+				return nil, fmt.Errorf("máximo número de reintentos alcanzado (%d)", maxRetries)
+			}
+			
+		default:
+			log.Errorf("action: unknown_message_type | result: fail | client_id: %v | type: %d | attempt: %d",
+				c.config.ID, msgType, attempt)
+			return nil, fmt.Errorf("tipo de mensaje inesperado: %d", msgType)
+		}
 	}
+	
+	return nil, fmt.Errorf("máximo número de reintentos alcanzado")
 }
 
 func (c *Client) StartBatchProcessing(bets []Bet, maxBatchSize int) {
@@ -310,11 +416,21 @@ func (c *Client) StartBatchProcessing(bets []Bet, maxBatchSize int) {
 		c.config.ID, processedBets, totalBets,
 	)
 	
+	// Cerrar conexión antes de notificar finalización
+	c.closeClientSocket()
+	
 	// Notificar al servidor que se finalizó el envío de apuestas
+	if err := c.createClientSocket(); err != nil {
+		log.Errorf("action: create_socket_for_notification | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
+		return
+	}
+	
 	if err := c.protocol.SendFinishedNotification(c.conn, c.config.ID); err != nil {
 		log.Errorf("action: send_finished_notification | result: fail | client_id: %v | error: %v",
 			c.config.ID, err,
 		)
+		c.closeClientSocket()
 		return
 	}
 	
@@ -324,6 +440,7 @@ func (c *Client) StartBatchProcessing(bets []Bet, maxBatchSize int) {
 		log.Errorf("action: receive_finished_ack | result: fail | client_id: %v | error: %v",
 			c.config.ID, err,
 		)
+		c.closeClientSocket()
 		return
 	}
 	
@@ -332,29 +449,19 @@ func (c *Client) StartBatchProcessing(bets []Bet, maxBatchSize int) {
 		log.Infof("action: finished_notification | result: success | client_id: %v", c.config.ID)
 	} else {
 		log.Errorf("action: finished_notification | result: fail | client_id: %v", c.config.ID)
+		c.closeClientSocket()
 		return
 	}
 	
-	// Consultar ganadores de la agencia
-	if err := c.protocol.SendWinnersQuery(c.conn, c.config.ID); err != nil {
-		log.Errorf("action: send_winners_query | result: fail | client_id: %v | error: %v",
-			c.config.ID, err,
-		)
-		return
-	}
+	c.closeClientSocket()
 	
-	// Recibir respuesta con ganadores
-	success, ganadores, err := c.protocol.ReceiveWinnersResponse(c.conn)
+	// Consultar ganadores de la agencia con retry automático
+	ganadores, err := c.queryWinnersWithRetry()
 	if err != nil {
-		log.Errorf("action: receive_winners_response | result: fail | client_id: %v | error: %v",
-			c.config.ID, err,
-		)
+		log.Errorf("action: consulta_ganadores | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
 		return
 	}
 	
-	if success {
-		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(ganadores))
-	} else {
-		log.Errorf("action: consulta_ganadores | result: fail")
-	}
+	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(ganadores))
 }

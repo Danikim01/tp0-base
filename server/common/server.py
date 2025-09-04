@@ -69,18 +69,12 @@ class Server:
         self._shutdown_requested = True
         self._graceful_shutdown()
 
-    def _mark_agency_finished(self, agency_id: str) -> bool:
+    def _mark_agency_finished(self, agency_id: str):
         """Marca una agencia como finalizada y verifica si todas terminaron"""
         with self._state_lock:
             self._finished_agencies.add(agency_id)
             logging.info(f'action: agency_finished | result: success | agency: {agency_id}')
             
-            if len(self._finished_agencies) >= self._expected_agencies:
-                if not self._lottery_completed:
-                    self._lottery_completed = True
-                    logging.info(f'action: sorteo | result: success')
-                    return True
-            return False
     
     def _clear_bets_file(self):
         """Limpia el archivo de apuestas al iniciar el servidor"""
@@ -208,7 +202,7 @@ class Server:
                             offset = 0
                             agency_id, _ = self._protocol._decode_string(payload, offset)
                             # Mark agency as finished
-                            lottery_completed = self._mark_agency_finished(agency_id)
+                            self._mark_agency_finished(agency_id)
                             # Send acknowledgment
                             self._protocol.send_finished_ack(client_sock, True)
                             logging.info(f'action: finished_notification | result: success | agency: {agency_id}')
@@ -224,13 +218,15 @@ class Server:
                             agency_id, _ = self._protocol._decode_string(payload, offset)
                             # Check if lottery is completed
                             with self._state_lock:
-                                if not self._lottery_completed:
-                                    # Lottery not completed yet, send empty response
-                                    self._protocol.send_winners_response(client_sock, [])
+                                if len(self._finished_agencies) >= self._expected_agencies:
+                                        logging.info(f'action: sorteo | result: success')
+                                        winners = self._get_winners_for_agency(agency_id)
+                                        self._protocol.send_winners_response(client_sock, winners)
                                 else:
-                                    # Get winners for this agency
-                                    winners = self._get_winners_for_agency(agency_id)
-                                    self._protocol.send_winners_response(client_sock, winners)
+                                    # Send to the client that the lottery is not completed
+                                    logging.info(f'action: sorteo | result: pending | agencies_finished: {len(self._finished_agencies)}/{self._expected_agencies}')
+                                    self._protocol.send_retry_response(client_sock, f"Lottery not completed yet. {len(self._finished_agencies)}/{self._expected_agencies} agencies finished.")
+                        
                         except Exception as e:
                             logging.error(f'action: winners_query | result: fail | ip: {addr[0]} | error: {e}')
                             break
