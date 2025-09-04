@@ -465,3 +465,91 @@ func (c *Client) StartBatchProcessing(bets []Bet, maxBatchSize int) {
 	
 	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(ganadores))
 }
+
+// StartCSVStreamingProcessing procesa un archivo CSV de manera streaming sin cargar todo en memoria
+func (c *Client) StartCSVStreamingProcessing(filename string, maxBatchSize int) {
+	// Set up signal handlers for graceful shutdown
+	c.setupSignalHandlers()
+	
+	log.Info("action: csv_streaming_start | result: success")
+	
+	// Crear conexión TCP
+	if err := c.createClientSocket(); err != nil {
+		log.Errorf("action: connect | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return
+	}
+	defer c.closeClientSocket()
+
+	// Crear batch processor y procesar CSV de manera streaming
+	batchProcessor := NewBatchProcessor(c.protocol, maxBatchSize)
+	
+	// Check if shutdown was requested
+	select {
+	case <-c.ctx.Done():
+		log.Info("action: csv_streaming | result: fail")
+		return
+	default:
+		// Continue with normal operation
+	}
+	
+	err := batchProcessor.ProcessCSVStreaming(c.conn, filename)
+	if err != nil {
+		log.Errorf("action: csv_streaming_processing | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
+		return
+	}
+
+	log.Info("action: csv_streaming_complete | result: success")
+	
+	// Cerrar conexión antes de notificar finalización
+	c.closeClientSocket()
+	
+	// Notificar al servidor que se finalizó el envío de apuestas
+	if err := c.createClientSocket(); err != nil {
+		log.Errorf("action: create_socket_for_notification | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
+		return
+	}
+	
+	if err := c.protocol.SendFinishedNotification(c.conn, c.config.ID); err != nil {
+		log.Errorf("action: send_finished_notification | result: fail | client_id: %v | error: %v",
+			c.config.ID, err,
+		)
+		c.closeClientSocket()
+		return
+	}
+	
+	// Recibir confirmación de notificación (respuesta simple)
+	msgType, _, err := c.protocol.ReceiveMessage(c.conn)
+	if err != nil {
+		log.Errorf("action: receive_finished_ack | result: fail | client_id: %v | error: %v",
+			c.config.ID, err,
+		)
+		c.closeClientSocket()
+		return
+	}
+	
+	success := msgType == MSG_SUCCESS
+	if success {
+		log.Infof("action: finished_notification | result: success | client_id: %v", c.config.ID)
+	} else {
+		log.Errorf("action: finished_notification | result: fail | client_id: %v", c.config.ID)
+		c.closeClientSocket()
+		return
+	}
+	
+	c.closeClientSocket()
+	
+	// Consultar ganadores de la agencia con retry automático
+	ganadores, err := c.queryWinnersWithRetry()
+	if err != nil {
+		log.Errorf("action: consulta_ganadores | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
+		return
+	}
+	
+	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(ganadores))
+}

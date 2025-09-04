@@ -123,17 +123,13 @@ func main() {
 	// Verificar si estamos en modo batch (archivo CSV) o modo individual
 	agencyID := v.GetString("id")
 	if agencyID != "" {
-		// Modo batch: procesar archivo CSV de la agencia
+		// Modo batch: procesar archivo CSV de la agencia usando streaming
 		agencyIDInt, _ := strconv.Atoi(agencyID)
 		filename := common.GetAgencyFilename(agencyIDInt)
 		
-		protocol := common.NewProtocol()
-		batchProcessor := common.NewBatchProcessor(protocol, maxBatchSize)
-		
-		// Leer apuestas desde CSV
-		bets, err := batchProcessor.ReadBetsFromCSV(filename)
-		if err != nil {
-			log.Errorf("Error leyendo archivo CSV %s: %v", filename, err)
+		// Verificar que el archivo existe antes de procesar
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			log.Errorf("Archivo CSV no encontrado: %s", filename)
 			// Fallback a modo individual
 			bet := common.Bet{
 				Agency:     agencyID,
@@ -149,11 +145,11 @@ func main() {
 			return
 		}
 		
-		log.Infof("Leyendo %d apuestas desde archivo %s", len(bets), filename)
+		log.Infof("Procesando archivo CSV %s con streaming (maxBatchSize: %d)", filename, maxBatchSize)
 		
-		// Procesar en batches
+		// Procesar CSV de manera streaming sin cargar todo en memoria
 		client := common.NewClient(clientConfig)
-		client.StartBatchProcessing(bets, maxBatchSize)
+		client.StartCSVStreamingProcessing(filename, maxBatchSize)
 	} else {
 		// Modo individual: apuesta única
 		bet := common.Bet{

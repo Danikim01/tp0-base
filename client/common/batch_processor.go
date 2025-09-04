@@ -136,6 +136,89 @@ func (bp *BatchProcessor) ProcessBetsInBatches(conn net.Conn, bets []Bet) error 
 	return nil
 }
 
+// ProcessCSVStreaming procesa el CSV de manera streaming, leyendo solo maxBatchSize apuestas a la vez
+func (bp *BatchProcessor) ProcessCSVStreaming(conn net.Conn, filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("error abriendo archivo %s: %v", filename, err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	
+	// No hay header en el CSV, empezamos directamente con los datos
+	totalProcessed := 0
+	batchNumber := 1
+
+	for {
+		// Leer hasta maxBatchSize apuestas
+		var batch []Bet
+		for len(batch) < bp.maxBatchSize {
+			record, err := reader.Read()
+			if err == io.EOF {
+				break // Fin del archivo
+			}
+			if err != nil {
+				return fmt.Errorf("error leyendo registro: %v", err)
+			}
+
+			// Parsear registro CSV (formato: nombre,apellido,documento,nacimiento,numero)
+			if len(record) < 5 {
+				continue // Saltar registros incompletos
+			}
+
+			// Extraer agency ID del nombre del archivo
+			agencyID := extractAgencyID(filename)
+
+			bet := Bet{
+				Agency:     agencyID,
+				Nombre:     strings.TrimSpace(record[0]),
+				Apellido:   strings.TrimSpace(record[1]),
+				DNI:        strings.TrimSpace(record[2]),
+				Nacimiento: strings.TrimSpace(record[3]),
+				Numero:     strings.TrimSpace(record[4]),
+			}
+
+			// Validar que los campos no estén vacíos
+			if bet.Nombre == "" || bet.Apellido == "" || bet.DNI == "" || bet.Nacimiento == "" || bet.Numero == "" {
+				continue // Saltar registros con campos vacíos
+			}
+
+			batch = append(batch, bet)
+		}
+
+		// Si no hay más apuestas para procesar, salir
+		if len(batch) == 0 {
+			break
+		}
+
+		// Enviar batch
+		err := bp.protocol.SendBatch(conn, batch)
+		if err != nil {
+			return fmt.Errorf("error enviando batch %d: %v", batchNumber, err)
+		}
+
+		// Recibir respuesta
+		success, _, _, err := bp.protocol.ReceiveResponse(conn)
+		if err != nil {
+			return fmt.Errorf("error recibiendo respuesta del batch %d: %v", batchNumber, err)
+		}
+
+		batchSize := len(batch)
+		if success {
+			totalProcessed += batchSize
+			fmt.Printf("Batch %d procesado exitosamente (%d apuestas)\n", batchNumber, batchSize)
+		} else {
+			fmt.Printf("Error procesando batch %d (%d apuestas)\n", batchNumber, batchSize)
+		}
+
+		batchNumber++
+	}
+
+	fmt.Printf("Procesamiento streaming completado: %d apuestas procesadas en %d batches\n", totalProcessed, batchNumber-1)
+	return nil
+}
+
 // GetAgencyFilename genera el nombre del archivo para una agencia específica
 func GetAgencyFilename(agencyID int) string {
 	// En Docker Compose, el directorio .data se monta en /data
