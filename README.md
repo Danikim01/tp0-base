@@ -260,20 +260,231 @@ python3 mi-generador.py $1 $2
 
 En el archivo de Docker Compose de salida se pueden definir volúmenes, variables de entorno y redes con libertad, pero recordar actualizar este script cuando se modifiquen tales definiciones en los sucesivos ejercicios.
 
+#### Cómo ejecutar el Ejercicio 1:
+
+1. **Generar el archivo docker-compose con una cantidad específica de clientes:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+   Este comando generará un archivo `docker-compose-dev.yaml` con 3 clientes (client1, client2, client3).
+
+2. **Verificar el archivo generado:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+
+3. **Ejecutar el sistema con los clientes generados:**
+   ```bash
+   make docker-compose-up
+   ```
+
+4. **Ver los logs de todos los clientes:**
+   ```bash
+   make docker-compose-logs
+   ```
+
+5. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Ejemplo de uso:**
+```bash
+# Generar compose con 5 clientes
+./generar-compose.sh docker-compose-dev.yaml 5
+
+# Iniciar el sistema
+make docker-compose-up
+
+# Ver logs específicos de un cliente
+make docker-compose-logs | grep client3
+
+# Detener el sistema
+make docker-compose-down
+```
+
 ### Ejercicio N°2:
 Modificar el cliente y el servidor para lograr que realizar cambios en el archivo de configuración no requiera reconstruír las imágenes de Docker para que los mismos sean efectivos. La configuración a través del archivo correspondiente (`config.ini` y `config.yaml`, dependiendo de la aplicación) debe ser inyectada en el container y persistida por fuera de la imagen (hint: `docker volumes`).
 
+#### Cómo ejecutar el Ejercicio 2:
+
+1. **Modificar los archivos de configuración sin reconstruir imágenes:**
+   ```bash
+   # Editar configuración del servidor
+   nano server/config.ini
+   
+   # Editar configuración del cliente
+   nano client/config.yaml
+   ```
+
+2. **Generar el docker-compose con volúmenes configurados:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+
+3. **Verificar que los volúmenes están montados correctamente:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+   Los volúmenes deberían aparecer como:
+   ```yaml
+   volumes:
+     - ./server/config.ini:/config.ini:ro
+     - ./client/config.yaml:/config.yaml:ro
+   ```
+
+4. **Ejecutar el sistema (sin rebuild):**
+   ```bash
+   make docker-compose-up
+   ```
+
+5. **Probar cambios en configuración en caliente:**
+   ```bash
+   # Modificar configuración (ej: cambiar log level)
+   sed -i 's/INFO/DEBUG/' server/config.ini
+   
+   # Reiniciar solo los containers (sin rebuild)
+   make docker-compose-down
+   make docker-compose-up
+   ```
+
+6. **Verificar que los cambios se aplicaron:**
+   ```bash
+   make docker-compose-logs | grep "DEBUG"
+   ```
+
+**Ventajas del uso de volúmenes:**
+- Cambios en configuración sin reconstruir imágenes
+- Configuración persistente fuera del container
+- Desarrollo más ágil y eficiente
 
 ### Ejercicio N°3:
 Crear un script de bash `validar-echo-server.sh` que permita verificar el correcto funcionamiento del servidor utilizando el comando `netcat` para interactuar con el mismo. Dado que el servidor es un echo server, se debe enviar un mensaje al servidor y esperar recibir el mismo mensaje enviado.
 
 En caso de que la validación sea exitosa imprimir: `action: test_echo_server | result: success`, de lo contrario imprimir:`action: test_echo_server | result: fail`.
 
-El script deberá ubicarse en la raíz del proyecto. Netcat no debe ser instalado en la máquina _host_ y no se pueden exponer puertos del servidor para realizar la comunicación (hint: `docker network`). `
+El script deberá ubicarse en la raíz del proyecto. Netcat no debe ser instalado en la máquina _host_ y no se pueden exponer puertos del servidor para realizar la comunicación (hint: `docker network`).
 
+#### Cómo ejecutar el Ejercicio 3:
+
+1. **Iniciar el servidor en modo detached:**
+   ```bash
+   # Generar compose con al menos 1 cliente
+   ./generar-compose.sh docker-compose-dev.yaml 1
+   
+   # Iniciar solo el servidor
+   make docker-compose-up
+   ```
+
+2. **Ejecutar el script de validación:**
+   ```bash
+   ./validar-echo-server.sh
+   ```
+
+3. **Verificar la salida esperada:**
+   - **Éxito**: `action: test_echo_server | result: success`
+   - **Fallo**: `action: test_echo_server | result: fail`
+
+4. **Ejemplo de uso completo:**
+   ```bash
+   # Iniciar el sistema
+   make docker-compose-up
+   
+   # En otra terminal, ejecutar validación
+   ./validar-echo-server.sh
+   
+   # Detener el sistema
+   make docker-compose-down
+   ```
+
+5. **Debugging (si falla la validación):**
+   ```bash
+   # Ver logs del servidor
+   make docker-compose-logs | grep server
+   
+   # Verificar que el servidor está corriendo
+   docker ps | grep server
+   
+   # Verificar la red Docker
+   docker network ls | grep testing_net
+   ```
+
+**Características del script:**
+- Usa `netcat` desde dentro de un container (no requiere instalación en host)
+- Utiliza la red Docker interna (`testing_net`) para comunicarse
+- No expone puertos externos del servidor
+- Valida que el mensaje enviado sea el mismo que el recibido
 
 ### Ejercicio N°4:
 Modificar servidor y cliente para que ambos sistemas terminen de forma _graceful_ al recibir la signal SIGTERM. Terminar la aplicación de forma _graceful_ implica que todos los _file descriptors_ (entre los que se encuentran archivos, sockets, threads y procesos) deben cerrarse correctamente antes que el thread de la aplicación principal muera. Loguear mensajes en el cierre de cada recurso (hint: Verificar que hace el flag `-t` utilizado en el comando `docker compose down`).
+
+#### Cómo ejecutar el Ejercicio 4:
+
+1. **Iniciar el sistema normalmente:**
+   ```bash
+   # Generar compose
+   ./generar-compose.sh docker-compose-dev.yaml 2
+   
+   # Iniciar el sistema
+   make docker-compose-up
+   ```
+
+2. **Probar el graceful shutdown con timeout:**
+   ```bash
+   # Usar el flag -t para especificar timeout (por defecto es 10s)
+   docker compose -f docker-compose-dev.yaml down -t 5
+   ```
+
+3. **Verificar los logs de cierre graceful:**
+   ```bash
+   # Ver los logs antes de hacer down
+   make docker-compose-logs
+   
+   # Los logs deberían mostrar mensajes como:
+   # - "Received SIGTERM, shutting down gracefully"
+   # - "Closing socket connection"
+   # - "Cleaning up resources"
+   # - "Graceful shutdown completed"
+   ```
+
+4. **Probar diferentes escenarios:**
+   ```bash
+   # Shutdown rápido (2 segundos)
+   docker compose down -t 2
+   
+   # Shutdown con más tiempo (15 segundos)
+   docker compose down -t 15
+   
+   # Shutdown inmediato (forzado)
+   docker compose down -t 0
+   ```
+
+5. **Monitorear el comportamiento:**
+   ```bash
+   # En una terminal, ver logs en tiempo real
+   make docker-compose-logs -f
+   
+   # En otra terminal, hacer el shutdown
+   make docker-compose-down
+   ```
+
+**Características del graceful shutdown:**
+- Manejo de señal SIGTERM en ambas aplicaciones
+- Cierre ordenado de sockets y file descriptors
+- Logs detallados del proceso de cierre
+- Timeout configurable para evitar bloqueos
+- Limpieza completa de recursos antes de terminar
+
+**Logs esperados durante el shutdown:**
+```
+server   | Received SIGTERM signal, initiating graceful shutdown
+server   | Closing server socket
+server   | All connections closed
+server   | Graceful shutdown completed
+client1  | Received SIGTERM signal, shutting down
+client1  | Closing client connection
+client1  | Client shutdown completed
+```
 
 ## Parte 2: Repaso de Comunicaciones
 
@@ -300,6 +511,69 @@ Se deberá implementar un módulo de comunicación entre el cliente y el servido
 * Correcta separación de responsabilidades entre modelo de dominio y capa de comunicación.
 * Correcto empleo de sockets, incluyendo manejo de errores y evitando los fenómenos conocidos como [_short read y short write_](https://cs61.seas.harvard.edu/site/2018/FileDescriptors/).
 
+#### Cómo ejecutar el Ejercicio 5:
+
+1. **Configurar las variables de entorno para las apuestas:**
+   ```bash
+   # Variables de la apuesta (ejemplo)
+   export NOMBRE="Santiago Lionel"
+   export APELLIDO="Lorca"
+   export DOCUMENTO="30904465"
+   export NACIMIENTO="1999-03-17"
+   export NUMERO="7574"
+   ```
+
+2. **Generar docker-compose con múltiples agencias (clientes):**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 5
+   ```
+
+3. **Iniciar el sistema de lotería:**
+   ```bash
+   make docker-compose-up
+   ```
+
+4. **Verificar los logs de apuestas:**
+   ```bash
+   # Ver logs del cliente (agencia)
+   make docker-compose-logs | grep "apuesta_enviada"
+   
+   # Ver logs del servidor (central)
+   make docker-compose-logs | grep "apuesta_almacenada"
+   ```
+
+5. **Ejemplo de logs esperados:**
+   ```
+   client1  | action: apuesta_enviada | result: success | dni: 30904465 | numero: 7574
+   server   | action: apuesta_almacenada | result: success | dni: 30904465 | numero: 7574
+   ```
+
+6. **Probar con diferentes agencias:**
+   ```bash
+   # Ver logs específicos de cada agencia
+   make docker-compose-logs | grep client1
+   make docker-compose-logs | grep client2
+   make docker-compose-logs | grep client3
+   ```
+
+7. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Características implementadas:**
+- Protocolo de comunicación binario personalizado
+- Serialización/deserialización de apuestas
+- Manejo de errores en sockets (short read/write)
+- Separación clara entre lógica de negocio y comunicación
+- Logs detallados para seguimiento de apuestas
+
+**Variables de entorno requeridas por cliente:**
+- `NOMBRE`: Nombre del apostador
+- `APELLIDO`: Apellido del apostador  
+- `DOCUMENTO`: DNI del apostador
+- `NACIMIENTO`: Fecha de nacimiento (formato: YYYY-MM-DD)
+- `NUMERO`: Número apostado
 
 ### Ejercicio N°6:
 Modificar los clientes para que envíen varias apuestas a la vez (modalidad conocida como procesamiento por _chunks_ o _batchs_). 
@@ -313,6 +587,79 @@ En el servidor, si todas las apuestas del *batch* fueron procesadas correctament
 La cantidad máxima de apuestas dentro de cada _batch_ debe ser configurable desde config.yaml. Respetar la clave `batch: maxAmount`, pero modificar el valor por defecto de modo tal que los paquetes no excedan los 8kB. 
 
 Por su parte, el servidor deberá responder con éxito solamente si todas las apuestas del _batch_ fueron procesadas correctamente.
+
+#### Cómo ejecutar el Ejercicio 6:
+
+1. **Preparar los archivos CSV de apuestas:**
+   ```bash
+   # Crear directorio de datos si no existe
+   mkdir -p .data
+   
+   # Los archivos CSV deberían estar en formato:
+   # Name,Surname,00000000,2000-01-01,7574
+   # Ejemplo: .data/agency-1.csv, .data/agency-2.csv, etc.
+   ```
+
+2. **Configurar el tamaño máximo de batch:**
+   ```bash
+   # Editar client/config.yaml
+   nano client/config.yaml
+   
+   # Asegurar que contenga:
+   # batch:
+   #   maxAmount: 50  # Máximo 50 apuestas por batch (< 8KB)
+   ```
+
+3. **Generar docker-compose con múltiples agencias:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+
+4. **Verificar que los volúmenes de datos están montados:**
+   ```bash
+   cat docker-compose-dev.yaml | grep -A2 -B2 "\.data"
+   ```
+
+5. **Iniciar el sistema de procesamiento por batches:**
+   ```bash
+   make docker-compose-up
+   ```
+
+6. **Verificar los logs de procesamiento por batches:**
+   ```bash
+   # Ver logs del servidor (batches recibidos)
+   make docker-compose-logs | grep "apuesta_recibida"
+   
+   # Ver logs del cliente (batches procesados)
+   make docker-compose-logs | grep "batch_processed"
+   ```
+
+7. **Ejemplo de logs esperados:**
+   ```
+   server   | action: apuesta_recibida | result: success | cantidad: 10
+   client1  | action: batch_processed | result: success | cantidad: 10
+   ```
+
+8. **Monitorear el progreso:**
+   ```bash
+   # Ver todas las apuestas almacenadas individualmente
+   make docker-compose-logs | grep "apuesta_almacenada"
+   
+   # Contar batches procesados
+   make docker-compose-logs | grep "batch_processed" | wc -l
+   ```
+
+9. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Características del procesamiento por batches:**
+- Archivos CSV leídos desde volúmenes Docker
+- Batches con tamaño configurable (máximo 8KB)
+- Procesamiento atómico: todo el batch debe ser exitoso
+- Logs detallados por batch y por apuesta individual
+- Volúmenes persistentes para datos
 
 ### Ejercicio N°7:
 
