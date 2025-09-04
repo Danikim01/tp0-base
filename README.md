@@ -93,9 +93,103 @@ python3 mi-generador.py $1 $2
 
 En el archivo de Docker Compose de salida se pueden definir volúmenes, variables de entorno y redes con libertad, pero recordar actualizar este script cuando se modifiquen tales definiciones en los sucesivos ejercicios.
 
+#### Cómo ejecutar el Ejercicio 1:
+
+1. **Generar el archivo docker-compose con una cantidad específica de clientes:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+   Este comando generará un archivo `docker-compose-dev.yaml` con 3 clientes (client1, client2, client3).
+
+2. **Verificar el archivo generado:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+
+3. **Ejecutar el sistema con los clientes generados:**
+   ```bash
+   make docker-compose-up
+   ```
+
+4. **Ver los logs de todos los clientes:**
+   ```bash
+   make docker-compose-logs
+   ```
+
+5. **Detener el sistema:**
+   ```bash
+   make docker-compose-down
+   ```
+
+**Ejemplo de uso:**
+```bash
+# Generar compose con 5 clientes
+./generar-compose.sh docker-compose-dev.yaml 5
+
+# Iniciar el sistema
+make docker-compose-up
+
+# Ver logs específicos de un cliente
+make docker-compose-logs | grep client3
+
+# Detener el sistema
+make docker-compose-down
+```
+
 ### Ejercicio N°2:
 Modificar el cliente y el servidor para lograr que realizar cambios en el archivo de configuración no requiera reconstruír las imágenes de Docker para que los mismos sean efectivos. La configuración a través del archivo correspondiente (`config.ini` y `config.yaml`, dependiendo de la aplicación) debe ser inyectada en el container y persistida por fuera de la imagen (hint: `docker volumes`).
 
+#### Cómo ejecutar el Ejercicio 2:
+
+1. **Modificar los archivos de configuración sin reconstruir imágenes:**
+   ```bash
+   # Editar configuración del servidor
+   nano server/config.ini
+   
+   # Editar configuración del cliente
+   nano client/config.yaml
+   ```
+
+2. **Generar el docker-compose con volúmenes configurados:**
+   ```bash
+   ./generar-compose.sh docker-compose-dev.yaml 3
+   ```
+
+3. **Verificar que los volúmenes están montados correctamente:**
+   ```bash
+   cat docker-compose-dev.yaml
+   ```
+   Los volúmenes deberían aparecer como:
+   ```yaml
+   volumes:
+     - ./server/config.ini:/config.ini:ro
+     - ./client/config.yaml:/config.yaml:ro
+   ```
+
+4. **Ejecutar el sistema (sin rebuild):**
+   ```bash
+   make docker-compose-up
+   ```
+
+5. **Probar cambios en configuración en caliente:**
+   ```bash
+   # Modificar configuración (ej: cambiar log level)
+   sed -i 's/INFO/DEBUG/' server/config.ini
+   
+   # Reiniciar solo los containers (sin rebuild)
+   make docker-compose-down
+   make docker-compose-up
+   ```
+
+6. **Verificar que los cambios se aplicaron:**
+   ```bash
+   make docker-compose-logs | grep "DEBUG"
+   ```
+
+**Ventajas del uso de volúmenes:**
+- Cambios en configuración sin reconstruir imágenes
+- Configuración persistente fuera del container
+- Desarrollo más ágil y eficiente
 
 ### Ejercicio N°3:
 Crear un script de bash `validar-echo-server.sh` que permita verificar el correcto funcionamiento del servidor utilizando el comando `netcat` para interactuar con el mismo. Dado que el servidor es un echo server, se debe enviar un mensaje al servidor y esperar recibir el mismo mensaje enviado.
